@@ -1,0 +1,8 @@
+namespace YardGig.Domain.Enums;
+
+public enum VerificationStatus
+{
+    Pending,
+    Approved,
+    Rejected
+}
