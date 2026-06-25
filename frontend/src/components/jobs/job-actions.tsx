@@ -16,6 +16,14 @@ export function formatStatus(status: string): string {
   return status;
 }
 
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.readAsDataURL(file);
+  });
+}
+
 interface JobActionsProps {
   job: JobDetail;
 }
@@ -67,12 +75,27 @@ export function JobActions({ job }: JobActionsProps) {
     e.target.value = "";
   };
 
-  const submitComplete = () => {
+  const submitComplete = async () => {
     if (photos.length === 0) {
       toast.error("Upload at least one completion photo.");
       return;
     }
-    statusMutation.mutate("Completed");
+    // Convert photos to data URLs for storage
+    const photoUrls: string[] = [];
+    for (const file of photos) {
+      const url = await fileToDataUrl(file);
+      photoUrls.push(url);
+    }
+    try {
+      await updateJobStatus(job.id, "Completed", photoUrls);
+      setLocalStatus("Completed");
+      setCompleteOpen(false);
+      setPhotos([]);
+      toast.success("Job marked as completed with photos. Customer will verify.");
+      invalidate();
+    } catch (err: any) {
+      toast.error(err?.errors?.[0] ?? "Failed to mark complete.");
+    }
   };
 
   const isVendor = hasRole("Vendor");

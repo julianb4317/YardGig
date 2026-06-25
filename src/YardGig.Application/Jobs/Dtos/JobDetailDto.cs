@@ -14,5 +14,7 @@ public record JobDetailDto(
     DateTime? ScheduleEnd,
     string[]? Photos,
     DateTime CreatedAt,
-    Guid CustomerProfileId
+    Guid CustomerProfileId,
+    int PendingRequestCount = 0,
+    string? AssignedVendorName = null
 );

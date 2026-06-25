@@ -110,10 +110,12 @@ export default function JobDetailPage() {
         {/* Photos */}
         {job.photos && job.photos.length > 0 && (
           <div className="mt-6">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Photos</h2>
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+              {job.status === "Completed" || job.status === "Paid" || job.status === "Closed" ? "Completion Photos" : "Photos"}
+            </h2>
             <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
               {job.photos.map((url, i) => (
-                <img key={i} src={url} alt={`Job photo ${i + 1}`} className="rounded-lg object-cover h-32 w-full" />
+                <img key={i} src={url} alt={`Photo ${i + 1}`} className="rounded-lg object-cover h-32 w-full" />
               ))}
             </div>
           </div>

@@ -34,6 +34,8 @@ export interface JobDetail {
   photos: string[] | null;
   createdAt: string;
   customerProfileId: string;
+  pendingRequestCount?: number;
+  assignedVendorName?: string | null;
 }
 
 export interface MapPin {

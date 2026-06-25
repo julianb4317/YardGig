@@ -196,6 +196,17 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
 
         try
         {
+            // If marking complete with photos, save them to the job
+            if (status == YardGig.Domain.Enums.JobStatus.Completed && body.CompletionPhotos is { Length: > 0 })
+            {
+                var job = await db.JobRequests.FindAsync(id);
+                if (job is not null)
+                {
+                    job.Photos = body.CompletionPhotos.ToList();
+                    job.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+
             var command = new UpdateJobStatusCommand(id, status);
             var result = await mediator.Send(command);
             return result.Succeeded ? Ok(new { status = status.ToString() }) : BadRequest(new { errors = result.Errors });
@@ -276,7 +287,7 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
 
 public record RequestJobBody(int? ProposedPriceCents, string? Note);
 public record AssignVendorBody(Guid VendorRequestId);
-public record UpdateStatusBody(string Status);
+public record UpdateStatusBody(string Status, string[]? CompletionPhotos = null);
 public record CancelJobBody(string? Reason);
 public record RescheduleJobBody(DateTime ScheduleStart, DateTime ScheduleEnd);
 public record EditJobBody(string? Title, string? Description, string[]? Categories, int? BudgetCents, string[]? Photos);

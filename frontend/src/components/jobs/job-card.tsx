@@ -29,9 +29,21 @@ export function JobCard({ job }: { job: JobDetail }) {
     >
       <div className="flex items-start justify-between gap-3">
         <h3 className="font-medium text-gray-900 line-clamp-1">{job.title}</h3>
-        <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium", STATUS_COLORS[job.status] ?? "bg-gray-100 text-gray-600")}>
-          {displayStatus(job.status)}
-        </span>
+        <div className="flex flex-col items-end gap-1">
+          <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium", STATUS_COLORS[job.status] ?? "bg-gray-100 text-gray-600")}>
+            {displayStatus(job.status)}
+          </span>
+          {job.pendingRequestCount != null && job.pendingRequestCount > 0 && (
+            <span className="rounded-full bg-blue-50 text-blue-700 px-2 py-0.5 text-xs font-medium">
+              {job.pendingRequestCount} request{job.pendingRequestCount > 1 ? "s" : ""}
+            </span>
+          )}
+          {job.assignedVendorName && (
+            <span className="rounded-full bg-purple-50 text-purple-700 px-2 py-0.5 text-xs">
+              {job.assignedVendorName}
+            </span>
+          )}
+        </div>
       </div>
 
       <p className="mt-1.5 text-sm text-gray-500 line-clamp-2">{job.description}</p>

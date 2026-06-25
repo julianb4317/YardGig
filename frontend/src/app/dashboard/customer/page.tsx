@@ -32,7 +32,7 @@ function CustomerJobsList() {
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["myJobs", status, page],
-    queryFn: () => fetchMyJobs({ status: status || undefined, page, pageSize: 10 }),
+    queryFn: () => fetchMyJobs({ status: status || undefined, page, pageSize: 20 }),
     refetchInterval: 15_000, // Auto-refresh every 15s to pick up status changes from vendors
   });
 

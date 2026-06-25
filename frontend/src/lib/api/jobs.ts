@@ -96,10 +96,10 @@ export function assignVendor(jobId: string, vendorRequestId: string) {
 
 // ─── Job Status Update ───
 
-export function updateJobStatus(jobId: string, status: string) {
+export function updateJobStatus(jobId: string, status: string, completionPhotos?: string[]) {
   return apiClient(`/api/jobs/${jobId}/status`, {
     method: "PUT",
-    body: { status },
+    body: { status, completionPhotos },
   });
 }
 
