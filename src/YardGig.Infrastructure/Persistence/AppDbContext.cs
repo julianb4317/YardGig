@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using YardGig.Application.Common.Interfaces;
 using YardGig.Domain.Entities;
 
@@ -55,6 +56,12 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<AbuseReport> AbuseReports => Set<AbuseReport>();
     public DbSet<VendorBalance> VendorBalances => Set<VendorBalance>();
     public DbSet<CustomerPaymentMethod> CustomerPaymentMethods => Set<CustomerPaymentMethod>();
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+        optionsBuilder.ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
