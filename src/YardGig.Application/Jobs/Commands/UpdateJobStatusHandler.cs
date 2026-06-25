@@ -38,6 +38,19 @@ public class UpdateJobStatusHandler(
         if (!AllowedTransitions.TryGetValue(job.Status, out var allowed) || !allowed.Contains(request.NewStatus))
             return Result.Failure($"Cannot transition from {job.Status} to {request.NewStatus}.");
 
+        // For vendor actions (InProgress, Completed), verify the user is the assigned vendor
+        if (request.NewStatus == JobStatus.InProgress || request.NewStatus == JobStatus.Completed)
+        {
+            if (job.Assignment is null)
+                return Result.Failure("No vendor is assigned to this job.");
+
+            var vendorProfile = await db.VendorProfiles
+                .FirstOrDefaultAsync(vp => vp.UserId == currentUser.UserId.Value, cancellationToken);
+
+            if (vendorProfile is null || job.Assignment.VendorProfileId != vendorProfile.Id)
+                return Result.Failure("Only the assigned vendor can update this status.");
+        }
+
         job.Status = request.NewStatus;
         job.UpdatedAt = DateTime.UtcNow;
 
@@ -51,7 +64,6 @@ public class UpdateJobStatusHandler(
                     break;
                 case JobStatus.Completed:
                     job.Assignment.CompletedAt = DateTime.UtcNow;
-                    job.AddDomainEvent(new JobCompletedEvent(job.Id));
                     break;
             }
         }

@@ -183,11 +183,19 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateStatusBody body)
     {
         if (!Enum.TryParse<YardGig.Domain.Enums.JobStatus>(body.Status, true, out var status))
-            return BadRequest("Invalid status value.");
+            return BadRequest(new { errors = new[] { "Invalid status value." } });
 
-        var command = new UpdateJobStatusCommand(id, status);
-        var result = await mediator.Send(command);
-        return result.Succeeded ? Ok() : BadRequest(result.Errors);
+        try
+        {
+            var command = new UpdateJobStatusCommand(id, status);
+            var result = await mediator.Send(command);
+            return result.Succeeded ? Ok(new { status = status.ToString() }) : BadRequest(new { errors = result.Errors });
+        }
+        catch (Exception ex)
+        {
+            var inner = ex; while (inner.InnerException != null) inner = inner.InnerException;
+            return StatusCode(500, new { error = ex.Message, rootCause = inner.Message });
+        }
     }
 
     /// <summary>

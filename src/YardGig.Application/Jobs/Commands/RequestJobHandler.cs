@@ -24,8 +24,9 @@ public class RequestJobHandler(
         // Auto-create vendor profile if missing
         if (vendorProfile is null)
         {
-            var domainUser = await db.Users.FindAsync([currentUser.UserId.Value], cancellationToken);
-            if (domainUser is null)
+            // Only add domain user if not already present
+            var domainUserExists = await db.Users.AnyAsync(u => u.Id == currentUser.UserId.Value, cancellationToken);
+            if (!domainUserExists)
             {
                 db.Users.Add(new Domain.Entities.ApplicationUser
                 {
@@ -45,7 +46,6 @@ public class RequestJobHandler(
         }
         else if (vendorProfile.VerificationStatus != VerificationStatus.Approved)
         {
-            // Auto-approve for development
             vendorProfile.VerificationStatus = VerificationStatus.Approved;
             await db.SaveChangesAsync(cancellationToken);
         }
@@ -57,11 +57,34 @@ public class RequestJobHandler(
         if (job.Status != JobStatus.Open && job.Status != JobStatus.Requested)
             return Result<Guid>.Failure("Job is no longer open for requests.");
 
-        var alreadyRequested = await db.VendorRequests
-            .AnyAsync(vr => vr.JobRequestId == request.JobRequestId && vr.VendorProfileId == vendorProfile.Id, cancellationToken);
+        // Check if already requested (excluding withdrawn — allow re-request after withdraw)
+        var existingRequest = await db.VendorRequests
+            .FirstOrDefaultAsync(vr => vr.JobRequestId == request.JobRequestId && vr.VendorProfileId == vendorProfile.Id, cancellationToken);
 
-        if (alreadyRequested)
-            return Result<Guid>.Failure("You have already requested this job.");
+        if (existingRequest is not null)
+        {
+            if (existingRequest.Status == VendorRequestStatus.Withdrawn || existingRequest.Status == VendorRequestStatus.Rejected)
+            {
+                // Re-activate the request (vendor is trying again)
+                existingRequest.Status = VendorRequestStatus.Pending;
+                existingRequest.ProposedPriceCents = request.ProposedPriceCents;
+                existingRequest.Note = request.Note;
+                existingRequest.UpdatedAt = DateTime.UtcNow;
+
+                if (job.Status == JobStatus.Open)
+                {
+                    job.Status = JobStatus.Requested;
+                    job.UpdatedAt = DateTime.UtcNow;
+                }
+
+                await db.SaveChangesAsync(cancellationToken);
+                return Result<Guid>.Success(existingRequest.Id);
+            }
+            if (existingRequest.Status == VendorRequestStatus.Pending)
+                return Result<Guid>.Failure("You have already requested this job.");
+            if (existingRequest.Status == VendorRequestStatus.Accepted)
+                return Result<Guid>.Failure("You are already assigned to this job.");
+        }
 
         var vendorRequest = new VendorRequest
         {
