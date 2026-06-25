@@ -25,9 +25,19 @@ public class AssignVendorHandler(
         if (job is null)
             return Result.Failure("Job not found.");
 
-        // Check ownership — handle case where CustomerProfile might reference via different path
-        if (job.CustomerProfile == null || job.CustomerProfile.UserId != currentUser.UserId.Value)
+        // Ownership check: verify the current user owns this job
+        if (job.CustomerProfile == null)
+        {
+            // Try to find customer profile by user ID directly
+            var profile = await db.CustomerProfiles
+                .FirstOrDefaultAsync(cp => cp.UserId == currentUser.UserId.Value, cancellationToken);
+            if (profile == null || profile.Id != job.CustomerProfileId)
+                return Result.Failure("Only the job owner can assign vendors.");
+        }
+        else if (job.CustomerProfile.UserId != currentUser.UserId.Value)
+        {
             return Result.Failure("Only the job owner can assign vendors.");
+        }
 
         if (job.Status != JobStatus.Requested && job.Status != JobStatus.Open)
             return Result.Failure("Job is not in a state that allows assignment.");
@@ -39,16 +49,13 @@ public class AssignVendorHandler(
             return Result.Failure("Vendor request not found.");
 
         if (vendorReq.Status != VendorRequestStatus.Pending)
-            return Result.Failure("This vendor request is no longer pending.");
-
-        if (vendorReq is null)
-            return Result.Failure("Vendor request not found.");
+            return Result.Failure($"This vendor request is not pending (current status: {vendorReq.Status}).");
 
         // Accept this vendor
         vendorReq.Status = VendorRequestStatus.Accepted;
         vendorReq.UpdatedAt = DateTime.UtcNow;
 
-        // Reject other vendors
+        // Reject other pending vendors
         var otherRequests = await db.VendorRequests
             .Where(vr => vr.JobRequestId == request.JobRequestId && vr.Id != request.VendorRequestId && vr.Status == VendorRequestStatus.Pending)
             .ToListAsync(cancellationToken);
@@ -72,7 +79,6 @@ public class AssignVendorHandler(
         // Update job status
         job.Status = JobStatus.Assigned;
         job.UpdatedAt = DateTime.UtcNow;
-        job.AddDomainEvent(new JobAssignedEvent(job.Id, vendorReq.VendorProfileId));
 
         await db.SaveChangesAsync(cancellationToken);
 

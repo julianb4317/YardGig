@@ -171,9 +171,18 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
     [Authorize(Policy = "CustomerOnly")]
     public async Task<IActionResult> AssignVendor(Guid id, [FromBody] AssignVendorBody body)
     {
-        var command = new AssignVendorCommand(id, body.VendorRequestId);
-        var result = await mediator.Send(command);
-        return result.Succeeded ? Ok() : BadRequest(result.Errors);
+        try
+        {
+            var command = new AssignVendorCommand(id, body.VendorRequestId);
+            var result = await mediator.Send(command);
+            if (result.Succeeded) return Ok(new { message = "Vendor assigned." });
+            return BadRequest(new { errors = result.Errors });
+        }
+        catch (Exception ex)
+        {
+            var inner = ex; while (inner.InnerException != null) inner = inner.InnerException;
+            return StatusCode(500, new { error = ex.Message, rootCause = inner.Message });
+        }
     }
 
     /// <summary>
