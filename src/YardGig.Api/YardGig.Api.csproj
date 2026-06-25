@@ -1,10 +1,11 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>YardGig.Api</RootNamespace>
+    <UserSecretsId>291ddeb5-e8c3-4f3f-85cf-02f25186dca2</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
