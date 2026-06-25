@@ -202,7 +202,7 @@ namespace YardGig.Infrastructure.Identity.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("DisplayName")
                         .IsRequired()
@@ -249,7 +249,7 @@ namespace YardGig.Infrastructure.Identity.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UserName")
                         .HasMaxLength(256)

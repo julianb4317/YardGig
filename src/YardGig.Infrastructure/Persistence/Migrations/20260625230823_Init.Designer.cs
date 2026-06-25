@@ -14,8 +14,8 @@ using YardGig.Infrastructure.Persistence;
 namespace YardGig.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260625223357_CleanStart")]
-    partial class CleanStart
+    [Migration("20260625230823_Init")]
+    partial class Init
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

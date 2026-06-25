@@ -12,8 +12,8 @@ using YardGig.Infrastructure.Identity;
 namespace YardGig.Infrastructure.Identity.Migrations
 {
     [DbContext(typeof(AppIdentityDbContext))]
-    [Migration("20260625004421_IdentityInitial")]
-    partial class IdentityInitial
+    [Migration("20260625230849_IdentityInit")]
+    partial class IdentityInit
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -205,7 +205,7 @@ namespace YardGig.Infrastructure.Identity.Migrations
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("DisplayName")
                         .IsRequired()
@@ -252,7 +252,7 @@ namespace YardGig.Infrastructure.Identity.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UserName")
                         .HasMaxLength(256)

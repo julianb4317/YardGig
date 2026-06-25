@@ -11,7 +11,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace YardGig.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
-    public partial class CleanStart : Migration
+    public partial class Init : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
