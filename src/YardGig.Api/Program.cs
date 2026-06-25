@@ -150,6 +150,7 @@ if (app.Environment.IsDevelopment())
 // Middleware pipeline
 if (app.Environment.IsDevelopment())
 {
+    app.UseDeveloperExceptionPage(); // Shows full stack trace for 500 errors in dev
     app.UseSwagger();
     app.UseSwaggerUI();
 }

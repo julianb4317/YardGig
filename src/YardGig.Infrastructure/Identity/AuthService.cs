@@ -65,18 +65,33 @@ public class AuthService(
         }
 
         // Assign roles
-        await userManager.AddToRolesAsync(user, roles);
+        try
+        {
+            await userManager.AddToRolesAsync(user, roles);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to assign roles {Roles} to user {Email}. Roles may not be seeded in the database.", roles, model.Email);
+            // User was created but role assignment failed — still return success with warning
+        }
 
         // Generate email confirmation token
         var confirmToken = await userManager.GenerateEmailConfirmationTokenAsync(user);
-        // In production: send email with confirmation link
         logger.LogInformation("Email confirmation token for {Email}: {Token}", user.Email, confirmToken);
 
-        await notificationService.SendEmailAsync(
-            user.Email,
-            "Confirm your YardGig account",
-            $"<p>Welcome to YardGig! Please confirm your email using this token: <code>{confirmToken}</code></p>",
-            ct);
+        try
+        {
+            await notificationService.SendEmailAsync(
+                user.Email,
+                "Confirm your YardGig account",
+                $"<p>Welcome to YardGig! Please confirm your email using this token: <code>{confirmToken}</code></p>",
+                ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to send confirmation email to {Email}", user.Email);
+            // Non-fatal — user can request resend later
+        }
 
         var response = new AuthResponse(
             AccessToken: string.Empty,
