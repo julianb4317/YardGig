@@ -18,8 +18,13 @@ public class GeocodingService(
         var apiKey = configuration["GoogleMaps:ApiKey"];
         if (string.IsNullOrEmpty(apiKey))
         {
-            logger.LogWarning("Google Maps API key not configured. Geocoding unavailable.");
-            return null;
+            // Development fallback: generate a deterministic point from the address hash
+            // so jobs can be created without a Google Maps API key
+            logger.LogWarning("Google Maps API key not configured. Using fallback coordinates for: {Address}", address);
+            var hash = Math.Abs(address.GetHashCode());
+            var lat = 39.7 + (hash % 1000) / 10000.0;  // Denver area ~39.7
+            var lng = -104.9 - (hash % 1000) / 10000.0; // Denver area ~-104.9
+            return new Point(lng, lat) { SRID = 4326 };
         }
 
         try

@@ -22,8 +22,16 @@ public class CreateJobHandler(
         var customerProfile = await db.CustomerProfiles
             .FirstOrDefaultAsync(cp => cp.UserId == currentUser.UserId.Value, cancellationToken);
 
+        // Auto-create profile if it doesn't exist (handles users registered before profile creation was added)
         if (customerProfile is null)
-            return Result<Guid>.Failure("Customer profile not found.");
+        {
+            customerProfile = new CustomerProfile
+            {
+                UserId = currentUser.UserId.Value
+            };
+            db.CustomerProfiles.Add(customerProfile);
+            await db.SaveChangesAsync(cancellationToken);
+        }
 
         var location = await geocoding.GeocodeAddressAsync(request.Address, cancellationToken);
         if (location is null)

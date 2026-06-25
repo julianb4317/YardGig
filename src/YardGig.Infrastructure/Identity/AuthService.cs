@@ -21,10 +21,10 @@ public class AuthService(
     IConfiguration configuration,
     ILogger<AuthService> logger,
     INotificationService notificationService,
-    AppIdentityDbContext identityDb
+    AppIdentityDbContext identityDb,
+    YardGig.Application.Common.Interfaces.IAppDbContext appDb
 ) : IAuthService
 {
-    // signInManager reserved for cookie-based auth flows (server-rendered pages)
     private readonly SignInManager<AppIdentityUser> _signInManager = signInManager;
     private static readonly string[] ValidRoles = ["Customer", "Vendor", "Admin"];
 
@@ -72,6 +72,44 @@ public class AuthService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to assign roles {Roles} to user {Email}. Roles may not be seeded in the database.", roles, model.Email);
+        }
+
+        // Create domain profiles based on selected roles
+        try
+        {
+            // Create the domain User record
+            var domainUser = new YardGig.Domain.Entities.ApplicationUser
+            {
+                Id = user.Id,
+                Email = model.Email,
+                DisplayName = model.DisplayName,
+                EmailVerified = true,
+                AuthProvider = "local",
+                IsActive = true
+            };
+            appDb.Users.Add(domainUser);
+
+            if (roles.Contains("Customer"))
+            {
+                appDb.CustomerProfiles.Add(new YardGig.Domain.Entities.CustomerProfile
+                {
+                    UserId = user.Id
+                });
+            }
+
+            if (roles.Contains("Vendor"))
+            {
+                appDb.VendorProfiles.Add(new YardGig.Domain.Entities.VendorProfile
+                {
+                    UserId = user.Id
+                });
+            }
+
+            await appDb.SaveChangesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to create domain profiles for {Email}", model.Email);
         }
 
         logger.LogInformation("User {Email} registered successfully with roles {Roles}", model.Email, roles);

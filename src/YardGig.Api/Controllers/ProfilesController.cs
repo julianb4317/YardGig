@@ -23,7 +23,22 @@ public class ProfilesController(IAppDbContext db, ICurrentUserService currentUse
             .AsNoTracking()
             .FirstOrDefaultAsync(vp => vp.UserId == currentUser.UserId);
 
-        if (profile is null) return NotFound();
+        if (profile is null)
+        {
+            return Ok(new
+            {
+                Id = (Guid?)null,
+                BusinessName = (string?)null,
+                Bio = (string?)null,
+                ServiceCategories = Array.Empty<string>(),
+                ServiceRadiusMiles = 15,
+                Latitude = (double?)null,
+                Longitude = (double?)null,
+                VerificationStatus = "Pending",
+                AverageRating = 0.0,
+                TotalJobsCompleted = 0
+            });
+        }
 
         return Ok(new
         {
@@ -81,7 +96,18 @@ public class ProfilesController(IAppDbContext db, ICurrentUserService currentUse
             .AsNoTracking()
             .FirstOrDefaultAsync(cp => cp.UserId == currentUser.UserId);
 
-        if (profile is null) return NotFound();
+        if (profile is null)
+        {
+            // Profile not created yet — return empty defaults
+            return Ok(new
+            {
+                Id = (Guid?)null,
+                DefaultAddress = (string?)null,
+                Latitude = (double?)null,
+                Longitude = (double?)null,
+                HasPaymentMethod = false
+            });
+        }
 
         return Ok(new
         {
