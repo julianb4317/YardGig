@@ -19,6 +19,7 @@ interface VendorMyRequest {
   jobTitle: string;
   budgetCents: number;
   status: string; // Pending, Accepted, Rejected, Withdrawn
+  jobStatus: string; // Open, Assigned, InProgress, Completed, Paid, etc.
   proposedPriceCents: number | null;
   createdAt: string;
 }
@@ -102,9 +103,16 @@ export default function VendorMyRequestsPage() {
                         {req.proposedPriceCents && ` · Your price: ${formatCents(req.proposedPriceCents)}`}
                       </p>
                     </div>
-                    <span className={cn("flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium", color)}>
-                      <Icon className="h-3.5 w-3.5" /> {req.status}
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className={cn("flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium", color)}>
+                        <Icon className="h-3.5 w-3.5" /> {req.status}
+                      </span>
+                      {req.status === "Accepted" && req.jobStatus && (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                          Job: {req.jobStatus}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="mt-2 flex items-center justify-between">

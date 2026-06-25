@@ -1,9 +1,9 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Play, CheckCircle, XCircle, Eye } from "lucide-react";
+import { Play, CheckCircle, XCircle, Eye, Camera, Upload } from "lucide-react";
 import { updateJobStatus, cancelJob } from "@/lib/api/jobs";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Spinner } from "@/components/ui/spinner";
@@ -19,6 +19,9 @@ export function JobActions({ job }: JobActionsProps) {
   const queryClient = useQueryClient();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
+  const [completionPhotos, setCompletionPhotos] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["job", job.id] });
@@ -31,6 +34,8 @@ export function JobActions({ job }: JobActionsProps) {
     mutationFn: (status: string) => updateJobStatus(job.id, status),
     onSuccess: (_, status) => {
       toast.success(`Job status updated to ${status}.`);
+      setCompleteOpen(false);
+      setCompletionPhotos([]);
       invalidate();
     },
     onError: (err: ApiError) => toast.error(err.errors[0] ?? "Failed to update status."),
@@ -45,6 +50,25 @@ export function JobActions({ job }: JobActionsProps) {
     },
     onError: (err: ApiError) => toast.error(err.errors[0] ?? "Failed to cancel."),
   });
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    setCompletionPhotos((prev) => [...prev, ...files].slice(0, 5)); // Max 5 photos
+  };
+
+  const removePhoto = (index: number) => {
+    setCompletionPhotos((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleComplete = () => {
+    if (completionPhotos.length === 0) {
+      toast.error("Please upload at least one completion photo.");
+      return;
+    }
+    // TODO: In production, upload photos to S3 first, then pass URLs to the status update
+    // For now, proceed with marking complete (photos stored locally for demo)
+    statusMutation.mutate("Completed");
+  };
 
   const isVendor = hasRole("Vendor");
   const isCustomer = hasRole("Customer");
@@ -75,18 +99,106 @@ export function JobActions({ job }: JobActionsProps) {
             Mark Completed
           </button>
 
-          <ConfirmDialog
-            open={completeOpen}
-            title="Mark job as completed?"
-            description="The customer will be notified and asked to verify the work and release payment. Please upload completion photos so the customer can review remotely."
-            confirmLabel="Yes, Mark Complete"
-            isPending={statusMutation.isPending}
-            onConfirm={() => {
-              statusMutation.mutate("Completed");
-              setCompleteOpen(false);
-            }}
-            onCancel={() => setCompleteOpen(false)}
-          />
+          {/* Completion dialog with photo upload */}
+          {completeOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setCompleteOpen(false)}>
+              <div className="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                <h3 className="text-lg font-semibold">Mark Job as Completed</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Upload photos of the completed work so the customer can verify remotely.
+                </p>
+
+                {/* Photo upload area */}
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Completion Photos <span className="text-red-500">*</span>
+                  </label>
+
+                  {/* Photo previews */}
+                  {completionPhotos.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                      {completionPhotos.map((file, i) => (
+                        <div key={i} className="relative">
+                          <img
+                            src={URL.createObjectURL(file)}
+                            alt={`Completion photo ${i + 1}`}
+                            className="h-20 w-full rounded-md object-cover"
+                          />
+                          <button
+                            onClick={() => removePhoto(i)}
+                            className="absolute -top-1 -right-1 rounded-full bg-red-500 p-0.5 text-white text-xs"
+                            aria-label="Remove photo"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {completionPhotos.length < 5 && (
+                    <div className="flex gap-2">
+                      {/* Browse files */}
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <Upload className="h-4 w-4" /> Browse Files
+                      </button>
+                      {/* Camera capture */}
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <Camera className="h-4 w-4" /> Take Photo
+                      </button>
+                    </div>
+                  )}
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileSelect}
+                  />
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={handleFileSelect}
+                  />
+
+                  <p className="mt-2 text-xs text-gray-400">
+                    {completionPhotos.length}/5 photos added. At least 1 required.
+                  </p>
+                </div>
+
+                {/* Actions */}
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    onClick={() => { setCompleteOpen(false); setCompletionPhotos([]); }}
+                    className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleComplete}
+                    disabled={statusMutation.isPending || completionPhotos.length === 0}
+                    className="flex items-center gap-1.5 rounded-md bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+                  >
+                    {statusMutation.isPending && <Spinner className="h-4 w-4 border-white border-t-transparent" />}
+                    Submit & Mark Complete
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -98,7 +210,7 @@ export function JobActions({ job }: JobActionsProps) {
             <div>
               <p className="text-sm font-medium text-green-800">Work completed — verify and pay</p>
               <p className="mt-1 text-xs text-green-600">
-                The vendor has marked this job as done. Review the work (check photos if available) and click below to release payment.
+                The vendor has marked this job as done. Review the work and completion photos, then release payment below.
               </p>
             </div>
           </div>

@@ -9,7 +9,8 @@ public record VendorMyRequestDto(
     Guid JobId,
     string JobTitle,
     int BudgetCents,
-    string Status,
+    string Status,         // VendorRequest status (Pending, Accepted, etc.)
+    string JobStatus,      // Actual job status (Open, Assigned, InProgress, Completed, etc.)
     int? ProposedPriceCents,
     DateTime CreatedAt
 );

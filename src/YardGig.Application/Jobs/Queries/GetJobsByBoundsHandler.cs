@@ -68,7 +68,7 @@ public class GetJobsByBoundsHandler(IAppDbContext db) : IRequestHandler<GetJobsB
             .Take(effectiveLimit)
             .ToList();
 
-        // Check which jobs this vendor has already requested
+        // Check which jobs this vendor has an active request for (not withdrawn/rejected)
         HashSet<Guid> requestedJobIds = [];
         if (request.VendorProfileId.HasValue && jobs.Count > 0)
         {
@@ -76,7 +76,8 @@ public class GetJobsByBoundsHandler(IAppDbContext db) : IRequestHandler<GetJobsB
             requestedJobIds = (await db.VendorRequests
                 .AsNoTracking()
                 .Where(vr => vr.VendorProfileId == request.VendorProfileId.Value
-                    && jobIds.Contains(vr.JobRequestId))
+                    && jobIds.Contains(vr.JobRequestId)
+                    && (vr.Status == Domain.Enums.VendorRequestStatus.Pending || vr.Status == Domain.Enums.VendorRequestStatus.Accepted))
                 .Select(vr => vr.JobRequestId)
                 .ToListAsync(cancellationToken))
                 .ToHashSet();

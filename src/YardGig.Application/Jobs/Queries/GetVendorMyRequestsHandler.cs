@@ -20,6 +20,7 @@ public class GetVendorMyRequestsHandler(IAppDbContext db) : IRequestHandler<GetV
                 vr.JobRequest.Title,
                 vr.JobRequest.BudgetCents,
                 vr.Status.ToString(),
+                vr.JobRequest.Status.ToString(),
                 vr.ProposedPriceCents,
                 vr.CreatedAt
             ))
