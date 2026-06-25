@@ -21,7 +21,7 @@ public class VendorProfileConfiguration : IEntityTypeConfiguration<VendorProfile
             .HasMaxLength(20);
 
         builder.Property(vp => vp.HomeLocation)
-            .HasColumnType("geography (point)");
+            .HasColumnType("geometry (point, 4326)");
 
         // PostGIS GiST index on vendor location
         builder.HasIndex(vp => vp.HomeLocation)

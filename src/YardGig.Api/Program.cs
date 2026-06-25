@@ -13,6 +13,10 @@ using YardGig.Infrastructure;
 using YardGig.Infrastructure.Hubs;
 using YardGig.Infrastructure.Identity;
 
+// Fix: Tell Npgsql to treat DateTime with Kind=Unspecified as UTC
+// This prevents "Cannot write DateTime with Kind=Unspecified to PostgreSQL type 'timestamp with time zone'"
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Serilog

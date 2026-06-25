@@ -20,7 +20,7 @@ public class JobRequestConfiguration : IEntityTypeConfiguration<JobRequest>
             .HasMaxLength(20);
 
         builder.Property(j => j.Location)
-            .HasColumnType("geography (point)")
+            .HasColumnType("geometry (point, 4326)")
             .IsRequired();
 
         // Partial index: open jobs by creation date

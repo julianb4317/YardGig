@@ -15,6 +15,6 @@ public class CustomerProfileConfiguration : IEntityTypeConfiguration<CustomerPro
         builder.Property(cp => cp.StripeCustomerId).HasMaxLength(100);
 
         builder.Property(cp => cp.DefaultLocation)
-            .HasColumnType("geography (point)");
+            .HasColumnType("geometry (point, 4326)");
     }
 }
