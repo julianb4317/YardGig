@@ -11,21 +11,13 @@ import { ApiError } from "@/lib/api-client";
 import type { JobDetail } from "@/lib/types";
 import { hasRole } from "@/lib/auth";
 
-// Human-readable status labels
-const STATUS_LABELS: Record<string, string> = {
-  Open: "Open",
-  Requested: "Requested",
-  Assigned: "Assigned",
-  InProgress: "In Progress",
-  Completed: "Completed",
-  Paid: "Paid",
-  Closed: "Closed",
-  Cancelled: "Cancelled",
-  Disputed: "Disputed",
-};
-
 export function formatStatus(status: string): string {
-  return STATUS_LABELS[status] ?? status;
+  const map: Record<string, string> = {
+    Open: "Open", Requested: "Requested", Assigned: "Assigned",
+    InProgress: "In Progress", Completed: "Completed", Paid: "Paid",
+    Closed: "Closed", Cancelled: "Cancelled", Disputed: "Disputed",
+  };
+  return map[status] ?? status;
 }
 
 interface JobActionsProps {
@@ -40,17 +32,21 @@ export function JobActions({ job }: JobActionsProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
+  // Track status locally so UI updates immediately after mutation
+  const [localStatus, setLocalStatus] = useState<string | null>(null);
+  const effectiveStatus = localStatus ?? job.status;
+
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["job", job.id] });
     queryClient.invalidateQueries({ queryKey: ["myJobs"] });
     queryClient.invalidateQueries({ queryKey: ["vendorJobs"] });
     queryClient.invalidateQueries({ queryKey: ["vendorMyRequests"] });
-    queryClient.refetchQueries({ queryKey: ["job", job.id] });
   };
 
   const statusMutation = useMutation({
     mutationFn: (status: string) => updateJobStatus(job.id, status),
     onSuccess: (_, status) => {
+      setLocalStatus(status); // Immediately update local state
       if (status === "InProgress") {
         toast.success("Work started! You can now mark it complete when finished.");
       } else if (status === "Completed") {
@@ -69,6 +65,7 @@ export function JobActions({ job }: JobActionsProps) {
     mutationFn: () => cancelJob(job.id),
     onSuccess: (data) => {
       setCancelOpen(false);
+      setLocalStatus("Cancelled");
       toast.success(data.penaltyApplied ? "Cancelled (late-cancel fee applied)." : "Job cancelled.");
       invalidate();
     },
@@ -78,7 +75,6 @@ export function JobActions({ job }: JobActionsProps) {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     setCompletionPhotos((prev) => [...prev, ...files].slice(0, 5));
-    // Reset input so same file can be selected again
     e.target.value = "";
   };
 
@@ -91,8 +87,6 @@ export function JobActions({ job }: JobActionsProps) {
       toast.error("Please upload at least one completion photo.");
       return;
     }
-    // TODO: Upload photos to storage, get URLs, attach to job
-    // For now, mark complete (photos are local preview only)
     statusMutation.mutate("Completed");
   };
 
@@ -103,7 +97,7 @@ export function JobActions({ job }: JobActionsProps) {
     <>
       <div className="flex flex-wrap gap-3">
         {/* Vendor: Start work */}
-        {isVendor && job.status === "Assigned" && (
+        {isVendor && effectiveStatus === "Assigned" && (
           <button
             onClick={() => statusMutation.mutate("InProgress")}
             disabled={statusMutation.isPending}
@@ -114,8 +108,8 @@ export function JobActions({ job }: JobActionsProps) {
           </button>
         )}
 
-        {/* Vendor: Mark completed (opens dialog) */}
-        {isVendor && job.status === "InProgress" && (
+        {/* Vendor: Mark completed (opens photo dialog) */}
+        {isVendor && effectiveStatus === "InProgress" && (
           <button
             onClick={() => setCompleteOpen(true)}
             disabled={statusMutation.isPending}
@@ -126,15 +120,15 @@ export function JobActions({ job }: JobActionsProps) {
           </button>
         )}
 
-        {/* Customer: Verify & Close info */}
-        {isCustomer && job.status === "Completed" && (
+        {/* Customer: Verify & Pay info */}
+        {isCustomer && effectiveStatus === "Completed" && (
           <div className="w-full rounded-lg border border-green-200 bg-green-50 p-4">
             <div className="flex items-start gap-3">
               <Eye className="h-5 w-5 text-green-600 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-green-800">Work completed — verify and pay</p>
                 <p className="mt-1 text-xs text-green-600">
-                  The vendor has marked this job as done. Review the work and completion photos, then release payment.
+                  The vendor has marked this job as done. Review the completion photos, then release payment.
                 </p>
               </div>
             </div>
@@ -142,7 +136,7 @@ export function JobActions({ job }: JobActionsProps) {
         )}
 
         {/* Customer: Cancel */}
-        {isCustomer && ["Open", "Requested", "Assigned"].includes(job.status) && (
+        {isCustomer && ["Open", "Requested", "Assigned"].includes(effectiveStatus) && (
           <button
             onClick={() => setCancelOpen(true)}
             className="flex items-center gap-1.5 rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
@@ -151,7 +145,6 @@ export function JobActions({ job }: JobActionsProps) {
           </button>
         )}
 
-        {/* Status badges */}
         {job.status === "Paid" && (
           <div className="rounded-md bg-emerald-50 border border-emerald-200 px-4 py-2 text-sm text-emerald-700">
             ✅ Payment complete
@@ -159,18 +152,21 @@ export function JobActions({ job }: JobActionsProps) {
         )}
       </div>
 
-      {/* === DIALOGS (rendered outside conditional blocks so they don't unmount) === */}
-
-      {/* Completion photo upload dialog */}
+      {/* === COMPLETION PHOTO DIALOG (always mounted, controlled by completeOpen) === */}
       {completeOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setCompleteOpen(false)}>
-          <div className="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold">Mark Job as Completed</h3>
+          <div
+            className="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="complete-dialog-title"
+          >
+            <h3 id="complete-dialog-title" className="text-lg font-semibold">Mark Job as Completed</h3>
             <p className="mt-1 text-sm text-gray-500">
               Upload photos of the completed work so the customer can verify remotely.
             </p>
 
-            {/* Photo upload area */}
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Completion Photos <span className="text-red-500">*</span>
@@ -187,7 +183,7 @@ export function JobActions({ job }: JobActionsProps) {
                       />
                       <button
                         onClick={() => removePhoto(i)}
-                        className="absolute -top-1 -right-1 rounded-full bg-red-500 w-5 h-5 flex items-center justify-center text-white text-xs"
+                        className="absolute -top-1 -right-1 rounded-full bg-red-500 w-5 h-5 flex items-center justify-center text-white text-xs leading-none"
                         aria-label="Remove photo"
                       >
                         ✕
@@ -220,7 +216,7 @@ export function JobActions({ job }: JobActionsProps) {
               <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileSelect} />
 
               <p className="mt-2 text-xs text-gray-400">
-                {completionPhotos.length}/5 photos. At least 1 required to submit.
+                {completionPhotos.length}/5 photos. At least 1 required.
               </p>
             </div>
 
@@ -245,7 +241,7 @@ export function JobActions({ job }: JobActionsProps) {
         </div>
       )}
 
-      {/* Cancel confirmation dialog */}
+      {/* CANCEL DIALOG */}
       <ConfirmDialog
         open={cancelOpen}
         title="Cancel this job?"
