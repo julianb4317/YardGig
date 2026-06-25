@@ -25,7 +25,8 @@ public class AssignVendorHandler(
         if (job is null)
             return Result.Failure("Job not found.");
 
-        if (job.CustomerProfile.UserId != currentUser.UserId.Value)
+        // Check ownership — handle case where CustomerProfile might reference via different path
+        if (job.CustomerProfile == null || job.CustomerProfile.UserId != currentUser.UserId.Value)
             return Result.Failure("Only the job owner can assign vendors.");
 
         if (job.Status != JobStatus.Requested && job.Status != JobStatus.Open)
@@ -33,6 +34,12 @@ public class AssignVendorHandler(
 
         var vendorReq = await db.VendorRequests
             .FirstOrDefaultAsync(vr => vr.Id == request.VendorRequestId && vr.JobRequestId == request.JobRequestId, cancellationToken);
+
+        if (vendorReq is null)
+            return Result.Failure("Vendor request not found.");
+
+        if (vendorReq.Status != VendorRequestStatus.Pending)
+            return Result.Failure("This vendor request is no longer pending.");
 
         if (vendorReq is null)
             return Result.Failure("Vendor request not found.");

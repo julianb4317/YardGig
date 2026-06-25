@@ -40,9 +40,14 @@ public class WithdrawRequestHandler(
         vendorRequest.Status = VendorRequestStatus.Withdrawn;
         vendorRequest.UpdatedAt = DateTime.UtcNow;
 
-        // If this vendor was assigned, remove assignment and re-open job
+        // Always check if job status needs to revert
+        var job = await db.JobRequests
+            .Include(j => j.CustomerProfile)
+            .FirstOrDefaultAsync(j => j.Id == request.JobRequestId, cancellationToken);
+
         if (wasAccepted)
         {
+            // If this vendor was assigned, remove assignment
             var assignment = await db.JobAssignments
                 .FirstOrDefaultAsync(ja => ja.JobRequestId == request.JobRequestId
                     && ja.VendorProfileId == vendorProfile.Id, cancellationToken);
@@ -51,30 +56,30 @@ public class WithdrawRequestHandler(
             {
                 db.JobAssignments.Remove(assignment);
             }
+        }
 
-            var job = await db.JobRequests
-                .Include(j => j.CustomerProfile)
-                .FirstOrDefaultAsync(j => j.Id == request.JobRequestId, cancellationToken);
+        // Revert job status based on remaining pending requests
+        if (job is not null && (job.Status == JobStatus.Requested || job.Status == JobStatus.Assigned))
+        {
+            var hasPendingRequests = await db.VendorRequests
+                .AnyAsync(vr => vr.JobRequestId == request.JobRequestId
+                    && vr.Id != vendorRequest.Id
+                    && vr.Status == VendorRequestStatus.Pending, cancellationToken);
 
-            if (job is not null)
+            if (!hasPendingRequests)
             {
-                // Check if other pending requests exist
-                var hasPendingRequests = await db.VendorRequests
-                    .AnyAsync(vr => vr.JobRequestId == request.JobRequestId
-                        && vr.Status == VendorRequestStatus.Pending, cancellationToken);
-
-                job.Status = hasPendingRequests ? JobStatus.Requested : JobStatus.Open;
+                job.Status = JobStatus.Open;
                 job.UpdatedAt = DateTime.UtcNow;
-
-                // Notify customer
-                await notifications.SendInAppNotificationAsync(
-                    job.CustomerProfile.UserId,
-                    "vendor_withdrew",
-                    "Vendor withdrew from your job",
-                    $"The assigned vendor has withdrawn from \"{job.Title}\". The job has been re-opened.",
-                    new { jobId = job.Id },
-                    cancellationToken);
             }
+
+            // Notify customer
+            await notifications.SendInAppNotificationAsync(
+                job.CustomerProfile.UserId,
+                "vendor_withdrew",
+                "Vendor withdrew from your job",
+                $"A vendor has withdrawn their request for \"{job.Title}\".",
+                new { jobId = job.Id },
+                cancellationToken);
         }
 
         await db.SaveChangesAsync(cancellationToken);
