@@ -25,7 +25,7 @@ export function JobCard({ job }: { job: JobDetail }) {
       <div className="flex items-start justify-between gap-3">
         <h3 className="font-medium text-gray-900 line-clamp-1">{job.title}</h3>
         <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium", STATUS_COLORS[job.status] ?? "bg-gray-100 text-gray-600")}>
-          {job.status}
+          {job.status === "InProgress" ? "In Progress" : job.status}
         </span>
       </div>
 

@@ -61,7 +61,7 @@ export default function JobDetailPage() {
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-2xl font-bold">{job.title}</h1>
           <span className={cn("shrink-0 rounded-full px-3 py-1 text-sm font-medium", STATUS_COLORS[job.status] ?? "bg-gray-100")}>
-            {job.status}
+            {job.status === "InProgress" ? "In Progress" : job.status}
           </span>
         </div>
 
