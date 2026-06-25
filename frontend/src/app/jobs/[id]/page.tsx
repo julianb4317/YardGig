@@ -35,6 +35,7 @@ export default function JobDetailPage() {
     queryKey: ["job", id],
     queryFn: () => fetchJobDetail(id),
     enabled: !!id,
+    refetchInterval: 10_000, // Auto-refresh to pick up status changes
   });
 
   if (isLoading) return <PageLoader />;

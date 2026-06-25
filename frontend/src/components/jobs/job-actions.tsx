@@ -28,12 +28,20 @@ export function JobActions({ job }: JobActionsProps) {
     queryClient.invalidateQueries({ queryKey: ["myJobs"] });
     queryClient.invalidateQueries({ queryKey: ["vendorJobs"] });
     queryClient.invalidateQueries({ queryKey: ["vendorMyRequests"] });
+    // Force refetch the current job to update UI immediately
+    queryClient.refetchQueries({ queryKey: ["job", job.id] });
   };
 
   const statusMutation = useMutation({
     mutationFn: (status: string) => updateJobStatus(job.id, status),
     onSuccess: (_, status) => {
-      toast.success(`Job status updated to ${status}.`);
+      if (status === "InProgress") {
+        toast.success("Work started! Refresh to see the 'Mark Completed' button.");
+      } else if (status === "Completed") {
+        toast.success("Job marked as completed. Customer will verify and release payment.");
+      } else {
+        toast.success(`Status updated to ${status}.`);
+      }
       setCompleteOpen(false);
       setCompletionPhotos([]);
       invalidate();

@@ -50,6 +50,7 @@ export default function VendorMyRequestsPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["vendorMyRequests"],
     queryFn: fetchMyVendorRequests,
+    refetchInterval: 15_000, // Auto-refresh to pick up status changes
   });
 
   const withdrawMutation = useMutation({
