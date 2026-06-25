@@ -138,18 +138,43 @@ if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
     var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILogger<Program>>();
+    
     try
     {
+        logger.LogInformation("Applying AppDbContext migrations...");
         var appDb = services.GetRequiredService<YardGig.Infrastructure.Persistence.AppDbContext>();
         await appDb.Database.MigrateAsync();
-
-        var identityDb = services.GetRequiredService<YardGig.Infrastructure.Identity.AppIdentityDbContext>();
-        await identityDb.Database.MigrateAsync();
+        logger.LogInformation("AppDbContext migrations applied successfully.");
     }
     catch (Exception ex)
     {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Database migration failed. Ensure PostgreSQL is running.");
+        var logger2 = services.GetRequiredService<ILogger<Program>>();
+        logger2.LogError(ex, "AppDbContext migration failed. Attempting EnsureCreated...");
+        try
+        {
+            var appDb = services.GetRequiredService<YardGig.Infrastructure.Persistence.AppDbContext>();
+            await appDb.Database.EnsureCreatedAsync();
+        }
+        catch { /* best effort */ }
+    }
+
+    try
+    {
+        logger.LogInformation("Applying AppIdentityDbContext migrations...");
+        var identityDb = services.GetRequiredService<YardGig.Infrastructure.Identity.AppIdentityDbContext>();
+        await identityDb.Database.MigrateAsync();
+        logger.LogInformation("AppIdentityDbContext migrations applied successfully.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "AppIdentityDbContext migration failed. Attempting EnsureCreated...");
+        try
+        {
+            var identityDb = services.GetRequiredService<YardGig.Infrastructure.Identity.AppIdentityDbContext>();
+            await identityDb.Database.EnsureCreatedAsync();
+        }
+        catch { /* best effort */ }
     }
 }
 

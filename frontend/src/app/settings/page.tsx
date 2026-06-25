@@ -6,6 +6,7 @@ import { hasRole } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { VendorProfileForm } from "@/components/settings/vendor-profile-form";
 import { CustomerProfileForm } from "@/components/settings/customer-profile-form";
+import { PaymentMethodsForm } from "@/components/settings/payment-methods-form";
 import { NotificationPreferencesForm } from "@/components/settings/notification-preferences-form";
 
 const TABS = [
@@ -57,9 +58,14 @@ export default function SettingsPage() {
                 </section>
               )}
               {isCustomer && (
-                <section>
+                <section className="mb-8">
                   <h2 className="text-lg font-semibold mb-4">Customer Profile</h2>
                   <CustomerProfileForm />
+                </section>
+              )}
+              {isCustomer && (
+                <section>
+                  <PaymentMethodsForm />
                 </section>
               )}
             </div>

@@ -19,10 +19,27 @@ public class CreateJobHandler(
         if (currentUser.UserId is null)
             return Result<Guid>.Failure("Unauthorized.");
 
+        // Ensure domain User exists (bridges Identity user to domain model)
+        var domainUser = await db.Users.FindAsync([currentUser.UserId.Value], cancellationToken);
+        if (domainUser is null)
+        {
+            domainUser = new ApplicationUser
+            {
+                Id = currentUser.UserId.Value,
+                Email = currentUser.Email ?? "",
+                DisplayName = currentUser.Email ?? "User",
+                EmailVerified = true,
+                AuthProvider = "local",
+                IsActive = true
+            };
+            db.Users.Add(domainUser);
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
+        // Ensure CustomerProfile exists
         var customerProfile = await db.CustomerProfiles
             .FirstOrDefaultAsync(cp => cp.UserId == currentUser.UserId.Value, cancellationToken);
 
-        // Auto-create profile if it doesn't exist (handles users registered before profile creation was added)
         if (customerProfile is null)
         {
             customerProfile = new CustomerProfile

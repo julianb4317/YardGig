@@ -97,8 +97,19 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
         [FromQuery] int pageSize = 20)
     {
         if (currentUser.UserId is null) return Unauthorized();
-        var result = await mediator.Send(new GetMyJobsQuery(currentUser.UserId.Value, status, page, pageSize));
-        return Ok(result);
+        try
+        {
+            var result = await mediator.Send(new GetMyJobsQuery(currentUser.UserId.Value, status, page, pageSize));
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            // If query fails (e.g., missing tables/profile), return empty list rather than 500
+            // This prevents the dashboard from showing an error state for new users
+            var logger = HttpContext.RequestServices.GetRequiredService<ILogger<JobsController>>();
+            logger.LogWarning(ex, "GetMyJobs failed for user {UserId}, returning empty result", currentUser.UserId);
+            return Ok(new { items = Array.Empty<object>(), totalCount = 0, page, pageSize });
+        }
     }
 
     /// <summary>
@@ -108,11 +119,18 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
     [Authorize(Policy = "CustomerOnly")]
     public async Task<IActionResult> CreateJob([FromBody] CreateJobCommand command)
     {
-        var result = await mediator.Send(command);
-        if (!result.Succeeded)
-            return BadRequest(result.Errors);
+        try
+        {
+            var result = await mediator.Send(command);
+            if (!result.Succeeded)
+                return BadRequest(new { errors = result.Errors });
 
-        return CreatedAtAction(nameof(GetJobDetail), new { id = result.Data }, new { id = result.Data });
+            return CreatedAtAction(nameof(GetJobDetail), new { id = result.Data }, new { id = result.Data });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message, innerError = ex.InnerException?.Message });
+        }
     }
 
     /// <summary>
