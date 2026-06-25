@@ -52,9 +52,15 @@ public class GetMyJobsHandler(IAppDbContext db) : IRequestHandler<GetMyJobsQuery
         var items = sorted.Select(j =>
         {
             var pendingCount = j.VendorRequests?.Count(vr => vr.Status == VendorRequestStatus.Pending) ?? 0;
-            var assignedVendorName = j.Assignment?.VendorProfile?.User?.DisplayName
-                ?? j.Assignment?.VendorProfile?.BusinessName;
-            var assignedVendorUserId = j.Assignment?.VendorProfile?.UserId;
+            string? assignedVendorName = null;
+            Guid? assignedVendorUserId = null;
+
+            if (j.Assignment?.VendorProfile != null)
+            {
+                var vp = j.Assignment.VendorProfile;
+                assignedVendorName = vp.BusinessName ?? vp.User?.DisplayName ?? vp.User?.Email ?? "Assigned Vendor";
+                assignedVendorUserId = vp.UserId;
+            }
 
             return new JobDetailDto(
                 j.Id,
