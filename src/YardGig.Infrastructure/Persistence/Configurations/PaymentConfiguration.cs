@@ -12,6 +12,7 @@ public class PaymentTransactionConfiguration : IEntityTypeConfiguration<PaymentT
         builder.HasKey(pt => pt.Id);
 
         builder.Property(pt => pt.StripePaymentIntentId).HasMaxLength(100);
+        builder.Property(pt => pt.StripeCustomerId).HasMaxLength(100);
         builder.Property(pt => pt.Currency).HasMaxLength(3);
 
         builder.Property(pt => pt.Status)
@@ -35,14 +36,14 @@ public class PayoutConfiguration : IEntityTypeConfiguration<Payout>
         builder.HasKey(p => p.Id);
 
         builder.Property(p => p.StripeTransferId).HasMaxLength(100);
+        builder.Property(p => p.FailureReason).HasMaxLength(500);
 
         builder.Property(p => p.Status)
             .HasConversion<string>()
             .HasMaxLength(20);
 
-        builder.HasOne(p => p.PaymentTransaction)
-            .WithOne(pt => pt.Payout)
-            .HasForeignKey<Payout>(p => p.PaymentTransactionId);
+        builder.HasIndex(p => new { p.VendorProfileId, p.Status })
+            .HasDatabaseName("idx_payout_vendor_status");
 
         builder.HasOne(p => p.VendorProfile)
             .WithMany()
@@ -62,5 +63,40 @@ public class PlatformFeeLedgerConfiguration : IEntityTypeConfiguration<PlatformF
         builder.HasOne(l => l.PaymentTransaction)
             .WithOne(pt => pt.FeeLedgerEntry)
             .HasForeignKey<PlatformFeeLedger>(l => l.PaymentTransactionId);
+    }
+}
+
+public class VendorBalanceConfiguration : IEntityTypeConfiguration<VendorBalance>
+{
+    public void Configure(EntityTypeBuilder<VendorBalance> builder)
+    {
+        builder.ToTable("VendorBalances");
+        builder.HasKey(vb => vb.Id);
+
+        builder.HasIndex(vb => vb.VendorProfileId).IsUnique();
+
+        builder.HasOne(vb => vb.VendorProfile)
+            .WithOne()
+            .HasForeignKey<VendorBalance>(vb => vb.VendorProfileId);
+    }
+}
+
+public class CustomerPaymentMethodConfiguration : IEntityTypeConfiguration<CustomerPaymentMethod>
+{
+    public void Configure(EntityTypeBuilder<CustomerPaymentMethod> builder)
+    {
+        builder.ToTable("CustomerPaymentMethods");
+        builder.HasKey(pm => pm.Id);
+
+        builder.Property(pm => pm.StripePaymentMethodId).HasMaxLength(100).IsRequired();
+        builder.Property(pm => pm.StripeCustomerId).HasMaxLength(100).IsRequired();
+        builder.Property(pm => pm.CardLast4).HasMaxLength(4);
+        builder.Property(pm => pm.CardBrand).HasMaxLength(20);
+
+        builder.HasIndex(pm => pm.CustomerProfileId);
+
+        builder.HasOne(pm => pm.CustomerProfile)
+            .WithMany()
+            .HasForeignKey(pm => pm.CustomerProfileId);
     }
 }

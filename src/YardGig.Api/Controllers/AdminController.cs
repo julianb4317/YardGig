@@ -451,7 +451,6 @@ public class AdminController(IAppDbContext db, ICurrentUserService currentUser) 
     {
         var query = db.Payouts.AsNoTracking()
             .Include(p => p.VendorProfile).ThenInclude(vp => vp.User)
-            .Include(p => p.PaymentTransaction)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<PayoutStatus>(status, true, out var s))

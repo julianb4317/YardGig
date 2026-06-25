@@ -117,6 +117,66 @@ public class ProfilesController(IAppDbContext db, ICurrentUserService currentUse
 
         return Ok();
     }
+
+    /// <summary>
+    /// Get a vendor's public profile (visible to customers).
+    /// Does NOT expose private fields (address, insurance docs, Stripe ID).
+    /// </summary>
+    [HttpGet("vendor/{vendorProfileId:guid}")]
+    public async Task<IActionResult> GetVendorPublicProfile(Guid vendorProfileId)
+    {
+        var profile = await db.VendorProfiles
+            .AsNoTracking()
+            .Include(vp => vp.User)
+            .FirstOrDefaultAsync(vp => vp.Id == vendorProfileId);
+
+        if (profile is null) return NotFound();
+
+        return Ok(new
+        {
+            profile.Id,
+            DisplayName = profile.User.DisplayName,
+            profile.BusinessName,
+            profile.Bio,
+            profile.ServiceCategories,
+            profile.VerificationStatus,
+            profile.AverageRating,
+            profile.TotalJobsCompleted,
+            MemberSince = profile.CreatedAt
+        });
+    }
+
+    /// <summary>
+    /// Get completed jobs for a vendor (public job history).
+    /// </summary>
+    [HttpGet("vendor/{vendorProfileId:guid}/jobs")]
+    public async Task<IActionResult> GetVendorJobHistory(
+        Guid vendorProfileId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
+    {
+        var jobs = await db.JobAssignments
+            .AsNoTracking()
+            .Include(ja => ja.JobRequest)
+            .Where(ja => ja.VendorProfileId == vendorProfileId && ja.CompletedAt != null)
+            .OrderByDescending(ja => ja.CompletedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(ja => new
+            {
+                ja.JobRequest.Id,
+                ja.JobRequest.Title,
+                ja.JobRequest.Categories,
+                ja.JobRequest.BudgetCents,
+                CompletedAt = ja.CompletedAt
+            })
+            .ToListAsync();
+
+        var totalCount = await db.JobAssignments
+            .CountAsync(ja => ja.VendorProfileId == vendorProfileId && ja.CompletedAt != null);
+
+        return Ok(new { items = jobs, totalCount, page, pageSize });
+    }
 }
 
 public record UpdateVendorProfileRequest(

@@ -87,6 +87,21 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
     }
 
     /// <summary>
+    /// Get current customer's jobs (paginated).
+    /// </summary>
+    [HttpGet("mine")]
+    [Authorize(Policy = "CustomerOnly")]
+    public async Task<IActionResult> GetMyJobs(
+        [FromQuery] string? status = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        if (currentUser.UserId is null) return Unauthorized();
+        var result = await mediator.Send(new GetMyJobsQuery(currentUser.UserId.Value, status, page, pageSize));
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Create a new job request (Customer).
     /// </summary>
     [HttpPost]
@@ -98,6 +113,19 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
             return BadRequest(result.Errors);
 
         return CreatedAtAction(nameof(GetJobDetail), new { id = result.Data }, new { id = result.Data });
+    }
+
+    /// <summary>
+    /// Edit a job (title, description, categories, budget, photos).
+    /// Only allowed when status is Open or Requested.
+    /// </summary>
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = "CustomerOnly")]
+    public async Task<IActionResult> EditJob(Guid id, [FromBody] EditJobBody body)
+    {
+        var command = new EditJobCommand(id, body.Title, body.Description, body.Categories, body.BudgetCents, body.Photos);
+        var result = await mediator.Send(command);
+        return result.Succeeded ? Ok() : BadRequest(result.Errors);
     }
 
     /// <summary>
@@ -194,6 +222,18 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
             ? Ok(new { message = "Request withdrawn." })
             : BadRequest(result.Errors);
     }
+
+    /// <summary>
+    /// Vendor views all their requests across jobs.
+    /// </summary>
+    [HttpGet("vendor/my-requests")]
+    [Authorize(Policy = "VendorOnly")]
+    public async Task<IActionResult> GetVendorMyRequests()
+    {
+        if (currentUser.UserId is null) return Unauthorized();
+        var result = await mediator.Send(new GetVendorMyRequestsQuery(currentUser.UserId.Value));
+        return Ok(result);
+    }
 }
 
 public record RequestJobBody(int? ProposedPriceCents, string? Note);
@@ -201,3 +241,4 @@ public record AssignVendorBody(Guid VendorRequestId);
 public record UpdateStatusBody(string Status);
 public record CancelJobBody(string? Reason);
 public record RescheduleJobBody(DateTime ScheduleStart, DateTime ScheduleEnd);
+public record EditJobBody(string? Title, string? Description, string[]? Categories, int? BudgetCents, string[]? Photos);

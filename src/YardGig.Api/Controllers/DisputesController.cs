@@ -48,6 +48,35 @@ public class DisputesController(IAppDbContext db, ICurrentUserService currentUse
 
         return Ok(new { disputeId = dispute.Id });
     }
+
+    /// <summary>
+    /// Get current user's disputes.
+    /// </summary>
+    [HttpGet("mine")]
+    public async Task<IActionResult> GetMyDisputes()
+    {
+        if (currentUser.UserId is null) return Unauthorized();
+
+        var disputes = await db.Disputes
+            .AsNoTracking()
+            .Include(d => d.JobRequest)
+            .Where(d => d.RaisedById == currentUser.UserId.Value)
+            .OrderByDescending(d => d.CreatedAt)
+            .Select(d => new
+            {
+                d.Id,
+                d.JobRequestId,
+                JobTitle = d.JobRequest.Title,
+                d.Reason,
+                Status = d.Status.ToString(),
+                d.Resolution,
+                d.ResolvedAt,
+                d.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(disputes);
+    }
 }
 
 public record RaiseDisputeRequest(Guid JobRequestId, string Reason);

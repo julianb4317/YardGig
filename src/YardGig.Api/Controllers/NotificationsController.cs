@@ -56,4 +56,22 @@ public class NotificationsController(IAppDbContext db, ICurrentUserService curre
 
         return Ok();
     }
+
+    /// <summary>
+    /// Mark all notifications as read for the current user.
+    /// </summary>
+    [HttpPut("read-all")]
+    public async Task<IActionResult> MarkAllAsRead()
+    {
+        var unread = await db.Notifications
+            .Where(n => n.UserId == currentUser.UserId && !n.IsRead)
+            .ToListAsync();
+
+        foreach (var n in unread)
+            n.IsRead = true;
+
+        await db.SaveChangesAsync();
+
+        return Ok(new { markedCount = unread.Count });
+    }
 }

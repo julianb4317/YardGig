@@ -53,6 +53,8 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<ScheduledNotification> ScheduledNotifications => Set<ScheduledNotification>();
     public DbSet<ConsentRecord> ConsentRecords => Set<ConsentRecord>();
     public DbSet<AbuseReport> AbuseReports => Set<AbuseReport>();
+    public DbSet<VendorBalance> VendorBalances => Set<VendorBalance>();
+    public DbSet<CustomerPaymentMethod> CustomerPaymentMethods => Set<CustomerPaymentMethod>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

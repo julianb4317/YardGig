@@ -2,50 +2,50 @@ namespace YardGig.Application.Common.Interfaces;
 
 public interface IPaymentService
 {
-    /// <summary>
-    /// Creates a PaymentIntent with manual capture and destination charge to vendor.
-    /// </summary>
-    Task<PaymentIntentResult> CreatePaymentIntentAsync(
-        int amountCents, string currency, string vendorStripeAccountId,
-        int platformFeeCents, string idempotencyKey, string? statementDescriptor = null,
-        CancellationToken cancellationToken = default);
+    // ── Customer Card Management ──
 
-    /// <summary>
-    /// Captures an authorized PaymentIntent.
-    /// </summary>
-    Task<bool> CapturePaymentAsync(string paymentIntentId, string idempotencyKey, CancellationToken cancellationToken = default);
+    /// <summary>Create a Stripe Customer object.</summary>
+    Task<string> CreateStripeCustomerAsync(string email, string name, CancellationToken ct = default);
 
-    /// <summary>
-    /// Creates a transfer to a vendor's connected account.
-    /// </summary>
-    Task<string> CreateTransferAsync(string vendorStripeAccountId, int amountCents, string currency, string idempotencyKey, CancellationToken cancellationToken = default);
+    /// <summary>Create a SetupIntent for saving a card (returns clientSecret).</summary>
+    Task<string> CreateSetupIntentAsync(string stripeCustomerId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Issues a full or partial refund.
-    /// </summary>
-    Task<RefundResult> CreateRefundAsync(string paymentIntentId, int? amountCents, string reason, string idempotencyKey, CancellationToken cancellationToken = default);
+    /// <summary>Detach a payment method from a customer.</summary>
+    Task DetachPaymentMethodAsync(string paymentMethodId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Creates a Stripe Express connected account for vendor onboarding.
-    /// </summary>
-    Task<string> CreateConnectedAccountAsync(string email, string businessName, CancellationToken cancellationToken = default);
+    // ── Platform Charges (customer card → platform balance) ──
 
-    /// <summary>
-    /// Generates an onboarding link for a connected account.
-    /// </summary>
-    Task<string> CreateAccountLinkAsync(string accountId, string returnUrl, string refreshUrl, CancellationToken cancellationToken = default);
+    /// <summary>Charge a customer's saved card. Money goes to platform's Stripe balance.</summary>
+    Task<ChargeResult> ChargeCustomerAsync(
+        string stripeCustomerId, string paymentMethodId,
+        int amountCents, string currency, string idempotencyKey,
+        string? description = null, CancellationToken ct = default);
 
-    /// <summary>
-    /// Gets the Express dashboard login link for a vendor.
-    /// </summary>
-    Task<string> CreateDashboardLinkAsync(string accountId, CancellationToken cancellationToken = default);
+    // ── Vendor Payouts (platform balance → vendor bank via connected account) ──
 
-    /// <summary>
-    /// Retrieves account status (charges_enabled, payouts_enabled).
-    /// </summary>
-    Task<ConnectedAccountStatus> GetAccountStatusAsync(string accountId, CancellationToken cancellationToken = default);
+    /// <summary>Transfer funds from platform balance to a vendor's connected account.</summary>
+    Task<string> CreateTransferAsync(string vendorStripeAccountId, int amountCents, string currency, string idempotencyKey, CancellationToken ct = default);
+
+    // ── Vendor Onboarding ──
+
+    /// <summary>Create a Stripe Express connected account for vendor (bank + identity).</summary>
+    Task<string> CreateConnectedAccountAsync(string email, string businessName, CancellationToken ct = default);
+
+    /// <summary>Generate onboarding link for connected account.</summary>
+    Task<string> CreateAccountLinkAsync(string accountId, string returnUrl, string refreshUrl, CancellationToken ct = default);
+
+    /// <summary>Get Stripe Express dashboard link for vendor.</summary>
+    Task<string> CreateDashboardLinkAsync(string accountId, CancellationToken ct = default);
+
+    /// <summary>Check connected account status.</summary>
+    Task<ConnectedAccountStatus> GetAccountStatusAsync(string accountId, CancellationToken ct = default);
+
+    // ── Refunds ──
+
+    /// <summary>Refund a payment (full or partial).</summary>
+    Task<RefundResult> CreateRefundAsync(string paymentIntentId, int? amountCents, string reason, string idempotencyKey, CancellationToken ct = default);
 }
 
-public record PaymentIntentResult(string PaymentIntentId, string ClientSecret, string Status);
+public record ChargeResult(bool Succeeded, string? PaymentIntentId = null, string? ErrorMessage = null);
 public record RefundResult(string RefundId, int AmountRefundedCents, string Status);
 public record ConnectedAccountStatus(bool ChargesEnabled, bool PayoutsEnabled, bool DetailsSubmitted);

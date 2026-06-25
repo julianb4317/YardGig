@@ -13,10 +13,42 @@ public class StripePaymentService(
     private string ApiKey => configuration["Stripe:SecretKey"]
         ?? throw new InvalidOperationException("Stripe:SecretKey not configured");
 
-    public async Task<PaymentIntentResult> CreatePaymentIntentAsync(
-        int amountCents, string currency, string vendorStripeAccountId,
-        int platformFeeCents, string idempotencyKey, string? statementDescriptor = null,
-        CancellationToken cancellationToken = default)
+    // ─── Customer Card Management ───
+
+    public async Task<string> CreateStripeCustomerAsync(string email, string name, CancellationToken ct = default)
+    {
+        StripeConfiguration.ApiKey = ApiKey;
+        var service = new CustomerService();
+        var customer = await service.CreateAsync(new CustomerCreateOptions { Email = email, Name = name }, cancellationToken: ct);
+        logger.LogInformation("Created Stripe Customer {Id} for {Email}", customer.Id, email);
+        return customer.Id;
+    }
+
+    public async Task<string> CreateSetupIntentAsync(string stripeCustomerId, CancellationToken ct = default)
+    {
+        StripeConfiguration.ApiKey = ApiKey;
+        var service = new SetupIntentService();
+        var intent = await service.CreateAsync(new SetupIntentCreateOptions
+        {
+            Customer = stripeCustomerId,
+            PaymentMethodTypes = ["card"],
+        }, cancellationToken: ct);
+        return intent.ClientSecret;
+    }
+
+    public async Task DetachPaymentMethodAsync(string paymentMethodId, CancellationToken ct = default)
+    {
+        StripeConfiguration.ApiKey = ApiKey;
+        var service = new PaymentMethodService();
+        await service.DetachAsync(paymentMethodId, cancellationToken: ct);
+    }
+
+    // ─── Platform Charges ───
+
+    public async Task<ChargeResult> ChargeCustomerAsync(
+        string stripeCustomerId, string paymentMethodId,
+        int amountCents, string currency, string idempotencyKey,
+        string? description = null, CancellationToken ct = default)
     {
         StripeConfiguration.ApiKey = ApiKey;
 
@@ -24,175 +56,129 @@ public class StripePaymentService(
         {
             Amount = amountCents,
             Currency = currency,
-            CaptureMethod = "manual", // Authorize first, capture later
-            ApplicationFeeAmount = platformFeeCents,
-            TransferData = new PaymentIntentTransferDataOptions
-            {
-                Destination = vendorStripeAccountId
-            },
-            StatementDescriptor = statementDescriptor?[..Math.Min(statementDescriptor.Length, 22)],
-            Metadata = new Dictionary<string, string>
-            {
-                ["idempotency_key"] = idempotencyKey
-            }
+            Customer = stripeCustomerId,
+            PaymentMethod = paymentMethodId,
+            Confirm = true,             // Charge immediately
+            OffSession = true,          // No customer present (saved card)
+            Description = description,
+            StatementDescriptor = "YARDGIG",
         };
 
-        var service = new PaymentIntentService();
-        var intent = await service.CreateAsync(options,
-            new RequestOptions { IdempotencyKey = idempotencyKey },
-            cancellationToken);
+        try
+        {
+            var service = new PaymentIntentService();
+            var intent = await service.CreateAsync(options,
+                new RequestOptions { IdempotencyKey = idempotencyKey }, ct);
 
-        logger.LogInformation("Created PaymentIntent {Id} for {Amount} {Currency} (key: {Key})",
-            intent.Id, amountCents, currency, idempotencyKey);
+            if (intent.Status == "succeeded")
+            {
+                logger.LogInformation("Charged {Amount}¢ from customer {CustomerId} (PI: {Id})",
+                    amountCents, stripeCustomerId, intent.Id);
+                return new ChargeResult(true, intent.Id);
+            }
 
-        return new PaymentIntentResult(intent.Id, intent.ClientSecret, intent.Status);
+            logger.LogWarning("Charge not immediately succeeded. Status: {Status}", intent.Status);
+            return new ChargeResult(false, intent.Id, $"Payment status: {intent.Status}");
+        }
+        catch (StripeException ex)
+        {
+            logger.LogError(ex, "Stripe charge failed for customer {CustomerId}", stripeCustomerId);
+            return new ChargeResult(false, ErrorMessage: ex.Message);
+        }
     }
 
-    public async Task<bool> CapturePaymentAsync(string paymentIntentId, string idempotencyKey, CancellationToken cancellationToken = default)
-    {
-        StripeConfiguration.ApiKey = ApiKey;
-
-        var service = new PaymentIntentService();
-        var intent = await service.CaptureAsync(paymentIntentId, null,
-            new RequestOptions { IdempotencyKey = idempotencyKey },
-            cancellationToken);
-
-        logger.LogInformation("Captured PaymentIntent {Id}, status: {Status}", intent.Id, intent.Status);
-        return intent.Status == "succeeded";
-    }
+    // ─── Vendor Payouts ───
 
     public async Task<string> CreateTransferAsync(
         string vendorStripeAccountId, int amountCents, string currency, string idempotencyKey,
-        CancellationToken cancellationToken = default)
+        CancellationToken ct = default)
     {
         StripeConfiguration.ApiKey = ApiKey;
 
-        var options = new TransferCreateOptions
+        var service = new TransferService();
+        var transfer = await service.CreateAsync(new TransferCreateOptions
         {
             Amount = amountCents,
             Currency = currency,
-            Destination = vendorStripeAccountId
-        };
+            Destination = vendorStripeAccountId,
+            Description = "Weekly payout from YardGig",
+        }, new RequestOptions { IdempotencyKey = idempotencyKey }, ct);
 
-        var service = new TransferService();
-        var transfer = await service.CreateAsync(options,
-            new RequestOptions { IdempotencyKey = idempotencyKey },
-            cancellationToken);
-
-        logger.LogInformation("Created Transfer {Id} to {Account} (key: {Key})",
-            transfer.Id, vendorStripeAccountId, idempotencyKey);
+        logger.LogInformation("Created Transfer {Id} ({Amount}¢) to {Account}",
+            transfer.Id, amountCents, vendorStripeAccountId);
         return transfer.Id;
     }
 
-    public async Task<RefundResult> CreateRefundAsync(
-        string paymentIntentId, int? amountCents, string reason, string idempotencyKey,
-        CancellationToken cancellationToken = default)
+    // ─── Vendor Onboarding ───
+
+    public async Task<string> CreateConnectedAccountAsync(string email, string businessName, CancellationToken ct = default)
     {
         StripeConfiguration.ApiKey = ApiKey;
+        var service = new AccountService();
+        var account = await service.CreateAsync(new AccountCreateOptions
+        {
+            Type = "express",
+            Email = email,
+            BusinessProfile = new AccountBusinessProfileOptions { Name = businessName },
+            Capabilities = new AccountCapabilitiesOptions
+            {
+                Transfers = new AccountCapabilitiesTransfersOptions { Requested = true }
+            }
+        }, cancellationToken: ct);
 
-        var options = new RefundCreateOptions
+        logger.LogInformation("Created Stripe Express account {Id} for {Email}", account.Id, email);
+        return account.Id;
+    }
+
+    public async Task<string> CreateAccountLinkAsync(string accountId, string returnUrl, string refreshUrl, CancellationToken ct = default)
+    {
+        StripeConfiguration.ApiKey = ApiKey;
+        var service = new AccountLinkService();
+        var link = await service.CreateAsync(new AccountLinkCreateOptions
+        {
+            Account = accountId,
+            ReturnUrl = returnUrl,
+            RefreshUrl = refreshUrl,
+            Type = "account_onboarding"
+        }, cancellationToken: ct);
+        return link.Url;
+    }
+
+    public async Task<string> CreateDashboardLinkAsync(string accountId, CancellationToken ct = default)
+    {
+        StripeConfiguration.ApiKey = ApiKey;
+        // For Express accounts, return the connect dashboard URL
+        return await Task.FromResult($"https://connect.stripe.com/express/{accountId}");
+    }
+
+    public async Task<ConnectedAccountStatus> GetAccountStatusAsync(string accountId, CancellationToken ct = default)
+    {
+        StripeConfiguration.ApiKey = ApiKey;
+        var service = new AccountService();
+        var account = await service.GetAsync(accountId, cancellationToken: ct);
+        return new ConnectedAccountStatus(account.ChargesEnabled, account.PayoutsEnabled, account.DetailsSubmitted);
+    }
+
+    // ─── Refunds ───
+
+    public async Task<RefundResult> CreateRefundAsync(
+        string paymentIntentId, int? amountCents, string reason, string idempotencyKey,
+        CancellationToken ct = default)
+    {
+        StripeConfiguration.ApiKey = ApiKey;
+        var service = new RefundService();
+        var refund = await service.CreateAsync(new RefundCreateOptions
         {
             PaymentIntent = paymentIntentId,
-            Amount = amountCents, // null = full refund
+            Amount = amountCents,
             Reason = reason switch
             {
                 "duplicate" => "duplicate",
                 "fraudulent" => "fraudulent",
                 _ => "requested_by_customer"
             }
-        };
-
-        var service = new RefundService();
-        var refund = await service.CreateAsync(options,
-            new RequestOptions { IdempotencyKey = idempotencyKey },
-            cancellationToken);
-
-        logger.LogInformation("Created Refund {Id} for PaymentIntent {PiId}, amount: {Amount}",
-            refund.Id, paymentIntentId, amountCents ?? refund.Amount);
+        }, new RequestOptions { IdempotencyKey = idempotencyKey }, ct);
 
         return new RefundResult(refund.Id, (int)refund.Amount, refund.Status);
-    }
-
-    public async Task<string> CreateConnectedAccountAsync(string email, string businessName, CancellationToken cancellationToken = default)
-    {
-        StripeConfiguration.ApiKey = ApiKey;
-
-        var options = new AccountCreateOptions
-        {
-            Type = "express",
-            Email = email,
-            BusinessProfile = new AccountBusinessProfileOptions
-            {
-                Name = businessName
-            },
-            Capabilities = new AccountCapabilitiesOptions
-            {
-                Transfers = new AccountCapabilitiesTransfersOptions { Requested = true }
-            }
-        };
-
-        var service = new AccountService();
-        var account = await service.CreateAsync(options, cancellationToken: cancellationToken);
-
-        logger.LogInformation("Created Stripe Express account {Id} for {Email}", account.Id, email);
-        return account.Id;
-    }
-
-    public async Task<string> CreateAccountLinkAsync(string accountId, string returnUrl, string refreshUrl, CancellationToken cancellationToken = default)
-    {
-        StripeConfiguration.ApiKey = ApiKey;
-
-        var options = new AccountLinkCreateOptions
-        {
-            Account = accountId,
-            RefreshUrl = refreshUrl,
-            ReturnUrl = returnUrl,
-            Type = "account_onboarding"
-        };
-
-        var service = new AccountLinkService();
-        var link = await service.CreateAsync(options, cancellationToken: cancellationToken);
-
-        return link.Url;
-    }
-
-    public async Task<string> CreateDashboardLinkAsync(string accountId, CancellationToken cancellationToken = default)
-    {
-        StripeConfiguration.ApiKey = ApiKey;
-
-        // Create a login link for the Express dashboard
-        var options = new AccountSessionCreateOptions
-        {
-            Account = accountId,
-            Components = new AccountSessionComponentsOptions
-            {
-                AccountOnboarding = new AccountSessionComponentsAccountOnboardingOptions
-                {
-                    Enabled = true
-                }
-            }
-        };
-
-        // For Express accounts, use the Account Login Link
-        var requestOptions = new RequestOptions();
-        var service = new Stripe.AccountService();
-        var account = await service.GetAsync(accountId, cancellationToken: cancellationToken);
-
-        // Return the Stripe Express dashboard URL
-        return $"https://connect.stripe.com/express/{accountId}";
-    }
-
-    public async Task<ConnectedAccountStatus> GetAccountStatusAsync(string accountId, CancellationToken cancellationToken = default)
-    {
-        StripeConfiguration.ApiKey = ApiKey;
-
-        var service = new AccountService();
-        var account = await service.GetAsync(accountId, cancellationToken: cancellationToken);
-
-        return new ConnectedAccountStatus(
-            account.ChargesEnabled,
-            account.PayoutsEnabled,
-            account.DetailsSubmitted
-        );
     }
 }

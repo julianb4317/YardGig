@@ -30,6 +30,8 @@ public interface IAppDbContext
     DbSet<ScheduledNotification> ScheduledNotifications { get; }
     DbSet<ConsentRecord> ConsentRecords { get; }
     DbSet<AbuseReport> AbuseReports { get; }
+    DbSet<VendorBalance> VendorBalances { get; }
+    DbSet<CustomerPaymentMethod> CustomerPaymentMethods { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
