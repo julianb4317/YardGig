@@ -36,6 +36,7 @@ export interface JobDetail {
   customerProfileId: string;
   pendingRequestCount?: number;
   assignedVendorName?: string | null;
+  assignedVendorUserId?: string | null;
 }
 
 export interface MapPin {

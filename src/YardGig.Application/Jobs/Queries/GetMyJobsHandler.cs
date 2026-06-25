@@ -54,6 +54,7 @@ public class GetMyJobsHandler(IAppDbContext db) : IRequestHandler<GetMyJobsQuery
             var pendingCount = j.VendorRequests?.Count(vr => vr.Status == VendorRequestStatus.Pending) ?? 0;
             var assignedVendorName = j.Assignment?.VendorProfile?.User?.DisplayName
                 ?? j.Assignment?.VendorProfile?.BusinessName;
+            var assignedVendorUserId = j.Assignment?.VendorProfile?.UserId;
 
             return new JobDetailDto(
                 j.Id,
@@ -71,7 +72,8 @@ public class GetMyJobsHandler(IAppDbContext db) : IRequestHandler<GetMyJobsQuery
                 j.CreatedAt,
                 j.CustomerProfileId,
                 pendingCount,
-                assignedVendorName
+                assignedVendorName,
+                assignedVendorUserId
             );
         }).ToList();
 

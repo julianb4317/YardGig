@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using YardGig.Application.Common.Interfaces;
 using YardGig.Application.Common.Models;
 using YardGig.Application.Jobs.Dtos;
+using YardGig.Domain.Enums;
 
 namespace YardGig.Application.Jobs.Queries;
 
@@ -12,10 +13,19 @@ public class GetJobDetailHandler(IAppDbContext db) : IRequestHandler<GetJobDetai
     {
         var j = await db.JobRequests
             .AsNoTracking()
-            .FirstOrDefaultAsync(j => j.Id == request.JobId, cancellationToken);
+            .Include(x => x.VendorRequests)
+            .Include(x => x.Assignment!)
+                .ThenInclude(a => a.VendorProfile)
+                    .ThenInclude(vp => vp.User)
+            .FirstOrDefaultAsync(x => x.Id == request.JobId, cancellationToken);
 
         if (j is null)
             return Result<JobDetailDto>.Failure("Job not found.");
+
+        var pendingCount = j.VendorRequests?.Count(vr => vr.Status == VendorRequestStatus.Pending) ?? 0;
+        var assignedVendorName = j.Assignment?.VendorProfile?.User?.DisplayName
+            ?? j.Assignment?.VendorProfile?.BusinessName;
+        var assignedVendorUserId = j.Assignment?.VendorProfile?.UserId;
 
         var dto = new JobDetailDto(
             j.Id,
@@ -31,7 +41,10 @@ public class GetJobDetailHandler(IAppDbContext db) : IRequestHandler<GetJobDetai
             j.ScheduleEnd,
             j.Photos?.ToArray(),
             j.CreatedAt,
-            j.CustomerProfileId
+            j.CustomerProfileId,
+            pendingCount,
+            assignedVendorName,
+            assignedVendorUserId
         );
 
         return Result<JobDetailDto>.Success(dto);

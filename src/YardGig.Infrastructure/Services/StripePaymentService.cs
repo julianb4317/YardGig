@@ -38,6 +38,7 @@ public class StripePaymentService(
 
     public async Task DetachPaymentMethodAsync(string paymentMethodId, CancellationToken ct = default)
     {
+        if (paymentMethodId.StartsWith("pm_dev_")) return; // Dev mode: no-op
         StripeConfiguration.ApiKey = ApiKey;
         var service = new PaymentMethodService();
         await service.DetachAsync(paymentMethodId, cancellationToken: ct);
@@ -50,6 +51,13 @@ public class StripePaymentService(
         int amountCents, string currency, string idempotencyKey,
         string? description = null, CancellationToken ct = default)
     {
+        // Dev mode: if payment method is a dev placeholder, simulate success
+        if (paymentMethodId.StartsWith("pm_dev_") || stripeCustomerId.StartsWith("cus_dev_"))
+        {
+            logger.LogInformation("DEV MODE: Simulated charge of {Amount}¢ for {Customer}", amountCents, stripeCustomerId);
+            return new ChargeResult(true, $"pi_dev_{Guid.NewGuid():N}");
+        }
+
         StripeConfiguration.ApiKey = ApiKey;
 
         var options = new PaymentIntentCreateOptions

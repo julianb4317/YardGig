@@ -127,7 +127,7 @@ export default function JobDetailPage() {
 
           {/* Customer: payment button when completed */}
           {hasRole("Customer") && job.status === "Completed" && (
-            <PaymentButton jobId={job.id} budgetCents={job.budgetCents} />
+            <PaymentButton jobId={job.id} budgetCents={job.budgetCents} assignedVendorId={job.assignedVendorUserId ?? undefined} assignedVendorName={job.assignedVendorName ?? undefined} />
           )}
 
           {/* Customer: view vendor requests */}

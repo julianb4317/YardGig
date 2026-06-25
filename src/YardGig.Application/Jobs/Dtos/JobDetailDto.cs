@@ -16,5 +16,6 @@ public record JobDetailDto(
     DateTime CreatedAt,
     Guid CustomerProfileId,
     int PendingRequestCount = 0,
-    string? AssignedVendorName = null
+    string? AssignedVendorName = null,
+    Guid? AssignedVendorUserId = null
 );
