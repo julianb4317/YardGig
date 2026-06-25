@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
@@ -125,6 +126,26 @@ builder.Services.AddRateLimiter(options =>
 });
 
 var app = builder.Build();
+
+// Auto-migrate databases in development
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var services = scope.ServiceProvider;
+    try
+    {
+        var appDb = services.GetRequiredService<YardGig.Infrastructure.Persistence.AppDbContext>();
+        await appDb.Database.MigrateAsync();
+
+        var identityDb = services.GetRequiredService<YardGig.Infrastructure.Identity.AppIdentityDbContext>();
+        await identityDb.Database.MigrateAsync();
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Database migration failed. Ensure PostgreSQL is running.");
+    }
+}
 
 // Middleware pipeline
 if (app.Environment.IsDevelopment())
