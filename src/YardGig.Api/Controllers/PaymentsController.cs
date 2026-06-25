@@ -68,6 +68,71 @@ public class PaymentsController(
     }
 
     /// <summary>
+    /// Save a payment method directly (development mode — no Stripe required).
+    /// In production, this would be handled via Stripe SetupIntent + webhook.
+    /// </summary>
+    [HttpPost("methods")]
+    [Authorize(Policy = "CustomerOnly")]
+    public async Task<IActionResult> AddPaymentMethod([FromBody] AddPaymentMethodBody body)
+    {
+        if (currentUser.UserId is null) return Unauthorized();
+
+        var profile = await db.CustomerProfiles
+            .FirstOrDefaultAsync(cp => cp.UserId == currentUser.UserId.Value);
+
+        if (profile is null)
+        {
+            // Auto-create profile
+            var domainUser = await db.Users.FindAsync(currentUser.UserId.Value);
+            if (domainUser is null)
+            {
+                db.Users.Add(new Domain.Entities.ApplicationUser
+                {
+                    Id = currentUser.UserId.Value,
+                    Email = currentUser.Email ?? "",
+                    DisplayName = currentUser.Email ?? "User",
+                    EmailVerified = true, AuthProvider = "local", IsActive = true
+                });
+            }
+            profile = new Domain.Entities.CustomerProfile { UserId = currentUser.UserId.Value };
+            db.CustomerProfiles.Add(profile);
+            await db.SaveChangesAsync();
+        }
+
+        // Mark existing as non-default
+        var existing = await db.CustomerPaymentMethods
+            .Where(pm => pm.CustomerProfileId == profile.Id)
+            .ToListAsync();
+        foreach (var e in existing) e.IsDefault = false;
+
+        var method = new Domain.Entities.CustomerPaymentMethod
+        {
+            CustomerProfileId = profile.Id,
+            StripePaymentMethodId = $"pm_dev_{Guid.NewGuid():N}",
+            StripeCustomerId = profile.StripeCustomerId ?? $"cus_dev_{Guid.NewGuid():N}",
+            CardLast4 = body.CardNumber.Length >= 4 ? body.CardNumber[^4..] : body.CardNumber,
+            CardBrand = DetectCardBrand(body.CardNumber),
+            ExpMonth = body.ExpMonth,
+            ExpYear = body.ExpYear,
+            IsDefault = true
+        };
+
+        db.CustomerPaymentMethods.Add(method);
+        await db.SaveChangesAsync();
+
+        return Ok(new { id = method.Id, method.CardLast4, method.CardBrand });
+    }
+
+    private static string DetectCardBrand(string number)
+    {
+        if (number.StartsWith('4')) return "visa";
+        if (number.StartsWith("5") || number.StartsWith("2")) return "mastercard";
+        if (number.StartsWith("3")) return "amex";
+        if (number.StartsWith("6")) return "discover";
+        return "card";
+    }
+
+    /// <summary>
     /// Remove a saved payment method.
     /// </summary>
     [HttpDelete("methods/{id:guid}")]
@@ -273,3 +338,4 @@ public class PaymentsController(
 }
 
 public record ChargeJobBody(Guid JobRequestId);
+public record AddPaymentMethodBody(string CardNumber, int ExpMonth, int ExpYear, string NameOnCard);

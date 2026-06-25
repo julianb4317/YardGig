@@ -10,29 +10,30 @@ public class GetJobDetailHandler(IAppDbContext db) : IRequestHandler<GetJobDetai
 {
     public async Task<Result<JobDetailDto>> Handle(GetJobDetailQuery request, CancellationToken cancellationToken)
     {
-        var job = await db.JobRequests
+        var j = await db.JobRequests
             .AsNoTracking()
-            .Where(j => j.Id == request.JobId)
-            .Select(j => new JobDetailDto(
-                j.Id,
-                j.Title,
-                j.Description,
-                j.Categories.ToArray(),
-                j.Address,
-                j.Location.Y,
-                j.Location.X,
-                j.Status.ToString(),
-                j.BudgetCents,
-                j.ScheduleStart,
-                j.ScheduleEnd,
-                j.Photos != null ? j.Photos.ToArray() : null,
-                j.CreatedAt,
-                j.CustomerProfileId
-            ))
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(j => j.Id == request.JobId, cancellationToken);
 
-        return job is null
-            ? Result<JobDetailDto>.Failure("Job not found.")
-            : Result<JobDetailDto>.Success(job);
+        if (j is null)
+            return Result<JobDetailDto>.Failure("Job not found.");
+
+        var dto = new JobDetailDto(
+            j.Id,
+            j.Title,
+            j.Description,
+            j.Categories.ToArray(),
+            j.Address,
+            j.Location?.Y ?? 0,
+            j.Location?.X ?? 0,
+            j.Status.ToString(),
+            j.BudgetCents,
+            j.ScheduleStart,
+            j.ScheduleEnd,
+            j.Photos?.ToArray(),
+            j.CreatedAt,
+            j.CustomerProfileId
+        );
+
+        return Result<JobDetailDto>.Success(dto);
     }
 }

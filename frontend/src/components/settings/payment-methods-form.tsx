@@ -55,21 +55,23 @@ export function PaymentMethodsForm() {
   });
 
   const addMutation = useMutation({
-    mutationFn: async (_data: CardForm) => {
-      // In production, this would use Stripe.js SetupIntent flow.
-      // For now, call the setup-intent endpoint to simulate adding a card.
-      // The card won't actually be charged until Stripe Elements is integrated.
-      const result = await apiClient<{ clientSecret: string }>("/api/payments/setup-intent", { method: "POST" });
-      // In production: use result.clientSecret with Stripe Elements
-      // For now: just show success (card saving requires Stripe.js)
-      return result;
-    },
+    mutationFn: (data: CardForm) =>
+      apiClient<{ id: string; cardLast4: string; cardBrand: string }>("/api/payments/methods", {
+        method: "POST",
+        body: {
+          cardNumber: data.cardNumber.replace(/\s/g, ""),
+          expMonth: data.expMonth,
+          expYear: data.expYear,
+          nameOnCard: data.nameOnCard,
+        },
+      }),
     onSuccess: () => {
-      toast.success("Payment setup initiated. Stripe Elements integration needed for full card saving.");
+      toast.success("Payment method saved.");
       setShowAddForm(false);
       reset();
+      queryClient.invalidateQueries({ queryKey: ["paymentMethods"] });
     },
-    onError: (err: ApiError) => toast.error(err.errors[0] ?? "Failed to set up payment."),
+    onError: (err: ApiError) => toast.error(err.errors[0] ?? "Failed to save card."),
   });
 
   const brandIcon = (brand: string) => {
