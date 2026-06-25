@@ -70,6 +70,7 @@ export function PaymentMethodsForm() {
       setShowAddForm(false);
       reset();
       queryClient.invalidateQueries({ queryKey: ["paymentMethods"] });
+      queryClient.invalidateQueries({ queryKey: ["customerProfile"] });
     },
     onError: (err: ApiError) => toast.error(err.errors[0] ?? "Failed to save card."),
   });

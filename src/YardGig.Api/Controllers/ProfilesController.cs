@@ -98,7 +98,6 @@ public class ProfilesController(IAppDbContext db, ICurrentUserService currentUse
 
         if (profile is null)
         {
-            // Profile not created yet — return empty defaults
             return Ok(new
             {
                 Id = (Guid?)null,
@@ -109,13 +108,17 @@ public class ProfilesController(IAppDbContext db, ICurrentUserService currentUse
             });
         }
 
+        // Check if any payment methods exist in the database
+        var hasPaymentMethod = !string.IsNullOrEmpty(profile.StripeCustomerId)
+            || await db.CustomerPaymentMethods.AnyAsync(pm => pm.CustomerProfileId == profile.Id);
+
         return Ok(new
         {
             profile.Id,
             profile.DefaultAddress,
             Latitude = profile.DefaultLocation?.Y,
             Longitude = profile.DefaultLocation?.X,
-            HasPaymentMethod = !string.IsNullOrEmpty(profile.StripeCustomerId)
+            HasPaymentMethod = hasPaymentMethod
         });
     }
 
