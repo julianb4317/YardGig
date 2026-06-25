@@ -99,9 +99,12 @@ export async function apiClient<T = unknown>(
     const errorBody = await res.json().catch(() => ({}));
     const errors: string[] = errorBody.errors
       ?? [errorBody.error ?? `Request failed with ${res.status}`];
-    // In development, include inner error details if present
+    // Include inner error details for debugging
     if (errorBody.innerError) {
       errors.push(errorBody.innerError);
+    }
+    if (errorBody.rootCause && errorBody.rootCause !== errors[0]) {
+      errors.push(errorBody.rootCause);
     }
     throw new ApiError(res.status, errors, res);
   }

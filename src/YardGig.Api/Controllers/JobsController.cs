@@ -129,7 +129,10 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { error = ex.Message, innerError = ex.InnerException?.Message });
+            // Walk the exception chain to find the real error
+            var inner = ex;
+            while (inner.InnerException != null) inner = inner.InnerException;
+            return StatusCode(500, new { error = ex.Message, rootCause = inner.Message });
         }
     }
 

@@ -19,34 +19,31 @@ public class CreateJobHandler(
         if (currentUser.UserId is null)
             return Result<Guid>.Failure("Unauthorized.");
 
-        // Ensure domain User exists (bridges Identity user to domain model)
-        var domainUser = await db.Users.FindAsync([currentUser.UserId.Value], cancellationToken);
-        if (domainUser is null)
-        {
-            domainUser = new ApplicationUser
-            {
-                Id = currentUser.UserId.Value,
-                Email = currentUser.Email ?? "",
-                DisplayName = currentUser.Email ?? "User",
-                EmailVerified = true,
-                AuthProvider = "local",
-                IsActive = true
-            };
-            db.Users.Add(domainUser);
-            await db.SaveChangesAsync(cancellationToken);
-        }
-
-        // Ensure CustomerProfile exists
+        // Ensure domain User and CustomerProfile exist
         var customerProfile = await db.CustomerProfiles
             .FirstOrDefaultAsync(cp => cp.UserId == currentUser.UserId.Value, cancellationToken);
 
         if (customerProfile is null)
         {
-            customerProfile = new CustomerProfile
+            // Check if domain user exists
+            var domainUser = await db.Users.FindAsync([currentUser.UserId.Value], cancellationToken);
+            if (domainUser is null)
             {
-                UserId = currentUser.UserId.Value
-            };
+                db.Users.Add(new ApplicationUser
+                {
+                    Id = currentUser.UserId.Value,
+                    Email = currentUser.Email ?? "",
+                    DisplayName = currentUser.Email ?? "User",
+                    EmailVerified = true,
+                    AuthProvider = "local",
+                    IsActive = true
+                });
+            }
+
+            customerProfile = new CustomerProfile { UserId = currentUser.UserId.Value };
             db.CustomerProfiles.Add(customerProfile);
+
+            // Save user + profile first, before the job (FK dependency)
             await db.SaveChangesAsync(cancellationToken);
         }
 

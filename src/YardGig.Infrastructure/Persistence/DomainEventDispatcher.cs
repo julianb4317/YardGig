@@ -1,11 +1,13 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using YardGig.Domain.Common;
 
 namespace YardGig.Infrastructure.Persistence;
 
 /// <summary>
 /// Dispatches domain events after SaveChanges succeeds.
+/// Failures in event handlers do not roll back the save.
 /// </summary>
 public static class DomainEventDispatcher
 {
@@ -25,7 +27,16 @@ public static class DomainEventDispatcher
 
         foreach (var domainEvent in domainEvents)
         {
-            await mediator.Publish(domainEvent);
+            try
+            {
+                await mediator.Publish(domainEvent);
+            }
+            catch (Exception)
+            {
+                // Domain event handlers should not crash the save operation.
+                // The primary write succeeded; event processing is best-effort.
+                // In production, failed events would go to a retry queue.
+            }
         }
     }
 }
