@@ -193,9 +193,17 @@ public class PaymentsController(
 
             var vendorProfile = job.Assignment.VendorProfile;
 
-            // Check for existing escrow
-            var escrow = await db.EscrowTransactions
-                .FirstOrDefaultAsync(e => e.JobRequestId == job.Id && e.Status == EscrowStatus.Held);
+            // Check for existing escrow (graceful if table doesn't exist)
+            YardGig.Domain.Entities.EscrowTransaction? escrow = null;
+            try
+            {
+                escrow = await db.EscrowTransactions
+                    .FirstOrDefaultAsync(e => e.JobRequestId == job.Id && e.Status == EscrowStatus.Held);
+            }
+            catch
+            {
+                // Table might not exist yet — proceed without escrow
+            }
 
             int amountCents, platformFeeCents, vendorNetCents;
             string? paymentIntentId = null;

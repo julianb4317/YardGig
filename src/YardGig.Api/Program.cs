@@ -137,7 +137,7 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-// Auto-create databases in development
+// Apply database migrations on startup
 if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
@@ -146,27 +146,24 @@ if (app.Environment.IsDevelopment())
     
     try
     {
-        logger.LogInformation("Ensuring AppDbContext database exists...");
         var appDb = services.GetRequiredService<YardGig.Infrastructure.Persistence.AppDbContext>();
-        await appDb.Database.EnsureCreatedAsync();
-        logger.LogInformation("AppDbContext database ready.");
+        await appDb.Database.MigrateAsync();
+        logger.LogInformation("AppDbContext migrations applied.");
     }
     catch (Exception ex)
     {
-        var logger2 = services.GetRequiredService<ILogger<Program>>();
-        logger2.LogError(ex, "AppDbContext setup failed.");
+        logger.LogError(ex, "AppDbContext migration failed.");
     }
 
     try
     {
-        logger.LogInformation("Ensuring AppIdentityDbContext database exists...");
         var identityDb = services.GetRequiredService<YardGig.Infrastructure.Identity.AppIdentityDbContext>();
-        await identityDb.Database.EnsureCreatedAsync();
-        logger.LogInformation("AppIdentityDbContext database ready.");
+        await identityDb.Database.MigrateAsync();
+        logger.LogInformation("AppIdentityDbContext migrations applied.");
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "AppIdentityDbContext setup failed.");
+        logger.LogError(ex, "AppIdentityDbContext migration failed.");
     }
 }
 

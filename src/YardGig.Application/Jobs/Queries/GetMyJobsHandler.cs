@@ -58,7 +58,9 @@ public class GetMyJobsHandler(IAppDbContext db) : IRequestHandler<GetMyJobsQuery
             if (j.Assignment?.VendorProfile != null)
             {
                 var vp = j.Assignment.VendorProfile;
-                assignedVendorName = vp.BusinessName ?? vp.User?.DisplayName ?? vp.User?.Email ?? "Assigned Vendor";
+                // BusinessName takes priority, then User.DisplayName, then fallback
+                assignedVendorName = !string.IsNullOrEmpty(vp.BusinessName) ? vp.BusinessName
+                    : vp.User?.DisplayName ?? vp.User?.Email ?? "Assigned Vendor";
                 assignedVendorUserId = vp.UserId;
             }
 
