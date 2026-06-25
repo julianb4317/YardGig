@@ -137,7 +137,7 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-// Auto-migrate databases in development
+// Auto-create databases in development
 if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
@@ -146,39 +146,27 @@ if (app.Environment.IsDevelopment())
     
     try
     {
-        logger.LogInformation("Applying AppDbContext migrations...");
+        logger.LogInformation("Ensuring AppDbContext database exists...");
         var appDb = services.GetRequiredService<YardGig.Infrastructure.Persistence.AppDbContext>();
-        await appDb.Database.MigrateAsync();
-        logger.LogInformation("AppDbContext migrations applied successfully.");
+        await appDb.Database.EnsureCreatedAsync();
+        logger.LogInformation("AppDbContext database ready.");
     }
     catch (Exception ex)
     {
         var logger2 = services.GetRequiredService<ILogger<Program>>();
-        logger2.LogError(ex, "AppDbContext migration failed. Attempting EnsureCreated...");
-        try
-        {
-            var appDb = services.GetRequiredService<YardGig.Infrastructure.Persistence.AppDbContext>();
-            await appDb.Database.EnsureCreatedAsync();
-        }
-        catch { /* best effort */ }
+        logger2.LogError(ex, "AppDbContext setup failed.");
     }
 
     try
     {
-        logger.LogInformation("Applying AppIdentityDbContext migrations...");
+        logger.LogInformation("Ensuring AppIdentityDbContext database exists...");
         var identityDb = services.GetRequiredService<YardGig.Infrastructure.Identity.AppIdentityDbContext>();
-        await identityDb.Database.MigrateAsync();
-        logger.LogInformation("AppIdentityDbContext migrations applied successfully.");
+        await identityDb.Database.EnsureCreatedAsync();
+        logger.LogInformation("AppIdentityDbContext database ready.");
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "AppIdentityDbContext migration failed. Attempting EnsureCreated...");
-        try
-        {
-            var identityDb = services.GetRequiredService<YardGig.Infrastructure.Identity.AppIdentityDbContext>();
-            await identityDb.Database.EnsureCreatedAsync();
-        }
-        catch { /* best effort */ }
+        logger.LogError(ex, "AppIdentityDbContext setup failed.");
     }
 }
 
