@@ -27,21 +27,23 @@ public class AuthController(IAuthService authService, ICurrentUserService curren
             if (!result.Succeeded)
                 return BadRequest(new { errors = result.Errors });
 
+            // Return tokens so frontend can log in immediately
             return Ok(new
             {
-                result.Data!.UserId,
+                result.Data!.AccessToken,
+                result.Data.RefreshToken,
+                result.Data.ExpiresAt,
+                result.Data.UserId,
                 result.Data.Roles,
-                message = "Registration successful. Please check your email to verify your account."
+                message = "Registration successful."
             });
         }
         catch (Exception ex)
         {
-            // Return the actual exception so we can debug
             return StatusCode(500, new
             {
                 error = ex.Message,
                 innerError = ex.InnerException?.Message,
-                stackTrace = ex.StackTrace?[..Math.Min(ex.StackTrace?.Length ?? 0, 500)]
             });
         }
     }

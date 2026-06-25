@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { setAuth } from "@/lib/auth";
 import { Spinner } from "@/components/ui/spinner";
 
 const registerSchema = z.object({
@@ -38,9 +39,20 @@ export default function RegisterPage() {
   const mutation = useMutation({
     mutationFn: (data: RegisterForm) =>
       apiClient<any>("/api/auth/register", { method: "POST", body: data, skipAuth: true }),
-    onSuccess: () => {
-      toast.success("Account created! Check your email to verify.");
-      router.push("/auth/login");
+    onSuccess: (data) => {
+      if (data.accessToken) {
+        // Registration returned tokens — go directly to dashboard
+        setAuth(data);
+        toast.success("Account created! Welcome to YardGig.");
+        const roles: string[] = data.roles ?? [];
+        if (roles.includes("Vendor")) router.push("/dashboard/vendor");
+        else if (roles.includes("Customer")) router.push("/dashboard/customer");
+        else router.push("/");
+      } else {
+        // Fallback: email verification required
+        toast.success("Account created! Check your email to verify.");
+        router.push("/auth/login");
+      }
     },
     onError: (err: ApiError) => {
       toast.error(err.errors[0] ?? "Registration failed.");

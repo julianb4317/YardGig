@@ -52,7 +52,7 @@ public class AuthService(
             UserName = model.Email,
             Email = model.Email,
             DisplayName = model.DisplayName,
-            EmailConfirmed = false,
+            EmailConfirmed = true, // Auto-confirm for now (no email server configured)
             TwoFactorEnabled = false,
             IsActive = true
         };
@@ -72,37 +72,12 @@ public class AuthService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to assign roles {Roles} to user {Email}. Roles may not be seeded in the database.", roles, model.Email);
-            // User was created but role assignment failed — still return success with warning
         }
 
-        // Generate email confirmation token
-        var confirmToken = await userManager.GenerateEmailConfirmationTokenAsync(user);
-        logger.LogInformation("Email confirmation token for {Email}: {Token}", user.Email, confirmToken);
+        logger.LogInformation("User {Email} registered successfully with roles {Roles}", model.Email, roles);
 
-        try
-        {
-            await notificationService.SendEmailAsync(
-                user.Email,
-                "Confirm your YardGig account",
-                $"<p>Welcome to YardGig! Please confirm your email using this token: <code>{confirmToken}</code></p>",
-                ct);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to send confirmation email to {Email}", user.Email);
-            // Non-fatal — user can request resend later
-        }
-
-        var response = new AuthResponse(
-            AccessToken: string.Empty,
-            RefreshToken: string.Empty,
-            ExpiresAt: DateTime.UtcNow,
-            UserId: user.Id,
-            Roles: roles,
-            RequiresEmailVerification: true
-        );
-
-        return Result<AuthResponse>.Success(response);
+        // Issue tokens immediately — no email verification step in dev
+        return await GenerateAuthResponseAsync(user);
     }
 
     public async Task<Result<AuthResponse>> LoginAsync(LoginModel model, CancellationToken ct = default)
