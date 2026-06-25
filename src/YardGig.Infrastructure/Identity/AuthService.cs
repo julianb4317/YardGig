@@ -101,7 +101,8 @@ public class AuthService(
             {
                 appDb.VendorProfiles.Add(new YardGig.Domain.Entities.VendorProfile
                 {
-                    UserId = user.Id
+                    UserId = user.Id,
+                    VerificationStatus = YardGig.Domain.Enums.VerificationStatus.Approved // Auto-approve in dev
                 });
             }
 

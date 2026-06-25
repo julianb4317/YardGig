@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 import { ArrowLeft, Calendar, MapPin, Tag, DollarSign, Clock } from "lucide-react";
 import Link from "next/link";
 import { AuthGuard } from "@/components/auth/auth-guard";
@@ -9,9 +10,11 @@ import { ErrorState } from "@/components/ui/error-state";
 import { PageLoader } from "@/components/ui/spinner";
 import { JobActions } from "@/components/jobs/job-actions";
 import { PaymentButton } from "@/components/payments/payment-button";
+import { RequestJobDialog } from "@/components/jobs/request-job-dialog";
 import { fetchJobDetail } from "@/lib/api/jobs";
 import { formatCents, cn } from "@/lib/utils";
 import { CATEGORY_LABELS } from "@/lib/types";
+import { hasRole } from "@/lib/auth";
 
 const STATUS_COLORS: Record<string, string> = {
   Open: "bg-green-100 text-green-800",
@@ -119,11 +122,13 @@ export default function JobDetailPage() {
         <div className="mt-8 border-t pt-6 space-y-4">
           <JobActions job={job} />
 
-          {job.status === "Completed" && (
+          {/* Customer: payment button when completed */}
+          {hasRole("Customer") && job.status === "Completed" && (
             <PaymentButton jobId={job.id} budgetCents={job.budgetCents} />
           )}
 
-          {(job.status === "Requested" || job.status === "Open") && (
+          {/* Customer: view vendor requests */}
+          {hasRole("Customer") && (job.status === "Requested" || job.status === "Open") && (
             <Link
               href={`/jobs/${job.id}/requests`}
               className="inline-block rounded-md border border-brand-600 px-4 py-2 text-sm font-medium text-brand-600 hover:bg-brand-50"
@@ -131,8 +136,34 @@ export default function JobDetailPage() {
               View Vendor Requests
             </Link>
           )}
+
+          {/* Vendor: request this job */}
+          {hasRole("Vendor") && (job.status === "Open" || job.status === "Requested") && (
+            <VendorRequestSection jobId={job.id} jobTitle={job.title} />
+          )}
         </div>
       </div>
     </AuthGuard>
+  );
+}
+
+function VendorRequestSection({ jobId, jobTitle }: { jobId: string; jobTitle: string }) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        onClick={() => setDialogOpen(true)}
+        className="w-full sm:w-auto rounded-md bg-brand-600 px-6 py-3 text-sm font-medium text-white hover:bg-brand-700"
+      >
+        🙋 Request This Job
+      </button>
+      <RequestJobDialog
+        jobId={jobId}
+        jobTitle={jobTitle}
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+      />
+    </>
   );
 }
