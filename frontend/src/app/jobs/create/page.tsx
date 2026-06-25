@@ -165,6 +165,16 @@ export default function CreateJobPage() {
             </div>
           </div>
 
+          {/* Escrow notice */}
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <p className="text-sm font-medium text-blue-800">💳 Payment held in escrow</p>
+            <p className="mt-1 text-xs text-blue-600">
+              Your card on file will be charged the budget amount when you post this job. 
+              Funds are held securely in escrow until you verify the work is completed. 
+              You won't be charged again — the escrowed amount is released to the vendor only after your approval.
+            </p>
+          </div>
+
           {/* Submit */}
           <button
             type="submit"
@@ -172,7 +182,7 @@ export default function CreateJobPage() {
             className="w-full rounded-md bg-brand-600 py-3 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {mutation.isPending && <Spinner className="h-4 w-4 border-white border-t-transparent" />}
-            Post Job
+            Post Job & Hold Payment
           </button>
         </form>
       </div>

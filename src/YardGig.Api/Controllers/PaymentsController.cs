@@ -164,109 +164,117 @@ public class PaymentsController(
     [Authorize(Policy = "CustomerOnly")]
     public async Task<IActionResult> ChargeForJob([FromBody] ChargeJobBody body)
     {
-        if (currentUser.UserId is null) return Unauthorized();
-
-        var job = await db.JobRequests
-            .Include(j => j.CustomerProfile)
-            .Include(j => j.Assignment!).ThenInclude(a => a.VendorProfile)
-            .FirstOrDefaultAsync(j => j.Id == body.JobRequestId);
-
-        if (job is null) return NotFound("Job not found.");
-        if (job.CustomerProfile.UserId != currentUser.UserId.Value)
-            return BadRequest(new { errors = new[] { "Only the customer can pay for this job." } });
-        if (job.Status != JobStatus.Completed)
-            return BadRequest(new { errors = new[] { "Job must be in Completed status to pay." } });
-
-        // Idempotency: check if already paid
-        var existing = await db.PaymentTransactions
-            .AnyAsync(pt => pt.JobRequestId == job.Id && pt.Status == PaymentStatus.Captured);
-        if (existing) return Ok(new { message = "Already paid.", alreadyPaid = true });
-
-        // Get customer's default card
-        var card = await db.CustomerPaymentMethods
-            .FirstOrDefaultAsync(pm => pm.CustomerProfileId == job.CustomerProfile.Id && pm.IsDefault);
-        if (card is null)
-            return BadRequest(new { errors = new[] { "No payment method on file. Please add a card." } });
-
-        // Calculate fees
-        var vendorProfile = job.Assignment!.VendorProfile;
-        var fees = await commissionService.CalculateFeesAsync(
-            job.BudgetCents, vendorProfile.Id, job.Categories.ToArray());
-
-        // Charge the saved card (money goes to platform's Stripe balance)
-        var idempotencyKey = $"charge_{job.Id}";
-        var result = await paymentService.ChargeCustomerAsync(
-            card.StripeCustomerId, card.StripePaymentMethodId,
-            fees.GrossAmountCents, "usd", idempotencyKey,
-            $"YardGig job: {job.Title[..Math.Min(job.Title.Length, 40)]}");
-
-        if (!result.Succeeded)
-            return BadRequest(new { errors = new[] { result.ErrorMessage ?? "Payment failed." } });
-
-        // Create transaction record
-        var transaction = new PaymentTransaction
+        try
         {
-            JobRequestId = job.Id,
-            StripePaymentIntentId = result.PaymentIntentId,
-            StripeCustomerId = card.StripeCustomerId,
-            AmountCents = fees.GrossAmountCents,
-            PlatformFeeCents = fees.PlatformFeeCents,
-            VendorEarnedCents = fees.VendorNetCents,
-            Status = PaymentStatus.Captured,
-            CapturedAt = DateTime.UtcNow
-        };
-        db.PaymentTransactions.Add(transaction);
+            if (currentUser.UserId is null) return Unauthorized();
 
-        // Credit vendor balance
-        var vendorBalance = await db.VendorBalances
-            .FirstOrDefaultAsync(vb => vb.VendorProfileId == vendorProfile.Id);
+            var job = await db.JobRequests
+                .Include(j => j.CustomerProfile)
+                .Include(j => j.Assignment!)
+                    .ThenInclude(a => a.VendorProfile)
+                .FirstOrDefaultAsync(j => j.Id == body.JobRequestId);
 
-        if (vendorBalance is null)
-        {
-            vendorBalance = new VendorBalance { VendorProfileId = vendorProfile.Id };
-            db.VendorBalances.Add(vendorBalance);
+            if (job is null)
+                return NotFound(new { errors = new[] { "Job not found." } });
+
+            if (job.CustomerProfile == null || job.CustomerProfile.UserId != currentUser.UserId.Value)
+                return BadRequest(new { errors = new[] { "Only the customer can verify payment." } });
+
+            if (job.Status != JobStatus.Completed)
+                return BadRequest(new { errors = new[] { $"Job must be in Completed status. Current: {job.Status}" } });
+
+            // Idempotency
+            var alreadyPaid = await db.PaymentTransactions
+                .AnyAsync(pt => pt.JobRequestId == job.Id && pt.Status == PaymentStatus.Captured);
+            if (alreadyPaid) return Ok(new { message = "Already paid.", alreadyPaid = true });
+
+            if (job.Assignment?.VendorProfile == null)
+                return BadRequest(new { errors = new[] { "No vendor assigned." } });
+
+            var vendorProfile = job.Assignment.VendorProfile;
+
+            // Check for existing escrow
+            var escrow = await db.EscrowTransactions
+                .FirstOrDefaultAsync(e => e.JobRequestId == job.Id && e.Status == EscrowStatus.Held);
+
+            int amountCents, platformFeeCents, vendorNetCents;
+            string? paymentIntentId = null;
+
+            if (escrow is not null)
+            {
+                // ESCROW EXISTS: Release held funds to vendor
+                escrow.Status = EscrowStatus.Released;
+                escrow.ReleasedAt = DateTime.UtcNow;
+                amountCents = escrow.AmountCents;
+                platformFeeCents = escrow.PlatformFeeCents;
+                vendorNetCents = escrow.VendorAmountCents;
+                paymentIntentId = escrow.StripePaymentIntentId;
+            }
+            else
+            {
+                // NO ESCROW: Charge card now (fallback for jobs created before escrow)
+                var card = await db.CustomerPaymentMethods
+                    .FirstOrDefaultAsync(pm => pm.CustomerProfileId == job.CustomerProfile.Id && pm.IsDefault);
+                if (card is null)
+                    return BadRequest(new { errors = new[] { "No payment method on file. Please add a card in Settings." } });
+
+                var fees = await commissionService.CalculateFeesAsync(
+                    job.BudgetCents, vendorProfile.Id, job.Categories.ToArray());
+
+                var result = await paymentService.ChargeCustomerAsync(
+                    card.StripeCustomerId, card.StripePaymentMethodId,
+                    fees.GrossAmountCents, "usd", $"charge_{job.Id}",
+                    $"YardGig: {job.Title[..Math.Min(job.Title.Length, 30)]}");
+
+                if (!result.Succeeded)
+                    return BadRequest(new { errors = new[] { result.ErrorMessage ?? "Payment failed." } });
+
+                amountCents = fees.GrossAmountCents;
+                platformFeeCents = fees.PlatformFeeCents;
+                vendorNetCents = fees.VendorNetCents;
+                paymentIntentId = result.PaymentIntentId;
+            }
+
+            // Create transaction record
+            var transaction = new PaymentTransaction
+            {
+                JobRequestId = job.Id,
+                StripePaymentIntentId = paymentIntentId,
+                StripeCustomerId = job.CustomerProfile.StripeCustomerId,
+                AmountCents = amountCents,
+                PlatformFeeCents = platformFeeCents,
+                VendorEarnedCents = vendorNetCents,
+                Status = PaymentStatus.Captured,
+                CapturedAt = DateTime.UtcNow
+            };
+            db.PaymentTransactions.Add(transaction);
+
+            // Credit vendor balance
+            var vendorBalance = await db.VendorBalances
+                .FirstOrDefaultAsync(vb => vb.VendorProfileId == vendorProfile.Id);
+            if (vendorBalance is null)
+            {
+                vendorBalance = new VendorBalance { VendorProfileId = vendorProfile.Id };
+                db.VendorBalances.Add(vendorBalance);
+            }
+            vendorBalance.AvailableBalanceCents += vendorNetCents;
+            vendorBalance.LifetimeEarnedCents += vendorNetCents;
+            vendorBalance.UpdatedAt = DateTime.UtcNow;
+
+            // Update job status
+            job.Status = JobStatus.Paid;
+            job.UpdatedAt = DateTime.UtcNow;
+            if (job.Assignment is not null) job.Assignment.ConfirmedAt = DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+
+            return Ok(new { transactionId = transaction.Id, vendorEarnedCents = vendorNetCents });
         }
-
-        vendorBalance.AvailableBalanceCents += fees.VendorNetCents;
-        vendorBalance.LifetimeEarnedCents += fees.VendorNetCents;
-        vendorBalance.UpdatedAt = DateTime.UtcNow;
-
-        // Ledger entries
-        db.LedgerEntries.Add(new LedgerEntry
+        catch (Exception ex)
         {
-            PaymentTransactionId = transaction.Id,
-            EntryType = "payment_received",
-            Account = "customer_charge",
-            DebitCents = fees.GrossAmountCents,
-            Description = $"Customer payment for job: {job.Title}",
-            IdempotencyKey = $"ledger_{transaction.Id}_received"
-        });
-        db.LedgerEntries.Add(new LedgerEntry
-        {
-            PaymentTransactionId = transaction.Id,
-            EntryType = "platform_fee",
-            Account = "platform_revenue",
-            DebitCents = fees.PlatformFeeCents,
-            IdempotencyKey = $"ledger_{transaction.Id}_fee"
-        });
-        db.LedgerEntries.Add(new LedgerEntry
-        {
-            PaymentTransactionId = transaction.Id,
-            EntryType = "vendor_earned",
-            Account = "vendor_balance",
-            DebitCents = fees.VendorNetCents,
-            IdempotencyKey = $"ledger_{transaction.Id}_vendor",
-            RelatedEntityId = vendorProfile.Id
-        });
-
-        // Update job status
-        job.Status = JobStatus.Paid;
-        job.UpdatedAt = DateTime.UtcNow;
-        if (job.Assignment is not null) job.Assignment.ConfirmedAt = DateTime.UtcNow;
-
-        await db.SaveChangesAsync();
-
-        return Ok(new { transactionId = transaction.Id, vendorEarnedCents = fees.VendorNetCents });
+            var inner = ex; while (inner.InnerException != null) inner = inner.InnerException;
+            return StatusCode(500, new { error = ex.Message, rootCause = inner.Message });
+        }
     }
 
     // ─────────────── VENDOR: BALANCE & PAYOUTS ───────────────

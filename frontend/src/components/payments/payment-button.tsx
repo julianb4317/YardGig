@@ -81,15 +81,15 @@ export function PaymentButton({ jobId, budgetCents, assignedVendorId, assignedVe
         ) : (
           <DollarSign className="h-4 w-4" />
         )}
-        Verify & Pay {formatCents(budgetCents)}
+        Verify & Release Payment
       </button>
 
       {/* Payment confirmation */}
       <ConfirmDialog
         open={confirmOpen}
         title="Verify work and release payment?"
-        description={`You will be charged ${formatCents(budgetCents)}. Platform fee: ${formatCents(platformFee)}. Vendor receives: ${formatCents(budgetCents - platformFee)}.`}
-        confirmLabel={chargeMutation.isPending ? "Processing..." : `Pay ${formatCents(budgetCents)}`}
+        description={`The escrowed ${formatCents(budgetCents)} will be released to the vendor (minus ${formatCents(platformFee)} platform fee). Vendor receives: ${formatCents(budgetCents - platformFee)}.`}
+        confirmLabel={chargeMutation.isPending ? "Processing..." : "Release Payment"}
         isPending={chargeMutation.isPending}
         onConfirm={() => chargeMutation.mutate()}
         onCancel={() => setConfirmOpen(false)}

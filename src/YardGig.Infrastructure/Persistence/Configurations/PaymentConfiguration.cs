@@ -100,3 +100,21 @@ public class CustomerPaymentMethodConfiguration : IEntityTypeConfiguration<Custo
             .HasForeignKey(pm => pm.CustomerProfileId);
     }
 }
+
+public class EscrowTransactionConfiguration : IEntityTypeConfiguration<YardGig.Domain.Entities.EscrowTransaction>
+{
+    public void Configure(EntityTypeBuilder<YardGig.Domain.Entities.EscrowTransaction> builder)
+    {
+        builder.ToTable("EscrowTransactions");
+        builder.HasKey(e => e.Id);
+
+        builder.Property(e => e.StripePaymentIntentId).HasMaxLength(100);
+        builder.Property(e => e.Currency).HasMaxLength(3);
+        builder.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
+
+        builder.HasIndex(e => new { e.JobRequestId, e.Status });
+
+        builder.HasOne(e => e.JobRequest).WithMany().HasForeignKey(e => e.JobRequestId);
+        builder.HasOne(e => e.CustomerProfile).WithMany().HasForeignKey(e => e.CustomerProfileId);
+    }
+}

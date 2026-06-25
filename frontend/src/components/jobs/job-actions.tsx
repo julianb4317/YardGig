@@ -130,8 +130,8 @@ export function JobActions({ job }: JobActionsProps) {
             <div className="flex items-start gap-3">
               <Eye className="h-5 w-5 text-green-600 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-green-800">Work completed — verify and pay</p>
-                <p className="mt-1 text-xs text-green-600">Review the vendor's completion photos, then release payment.</p>
+                <p className="text-sm font-medium text-green-800">Work completed — verify to release payment</p>
+                <p className="mt-1 text-xs text-green-600">Review the vendor's completion photos. Your payment was held in escrow when you posted this job. Verifying will release funds to the vendor.</p>
               </div>
             </div>
           </div>

@@ -11,7 +11,9 @@ namespace YardGig.Application.Jobs.Commands;
 public class CreateJobHandler(
     IAppDbContext db,
     IGeocodingService geocoding,
-    ICurrentUserService currentUser
+    ICurrentUserService currentUser,
+    IPaymentService paymentService,
+    ICommissionService commissionService
 ) : IRequestHandler<CreateJobCommand, Result<Guid>>
 {
     public async Task<Result<Guid>> Handle(CreateJobCommand request, CancellationToken cancellationToken)
@@ -71,6 +73,37 @@ public class CreateJobHandler(
 
         db.JobRequests.Add(job);
         await db.SaveChangesAsync(cancellationToken);
+
+        // ESCROW: Charge customer's card and hold funds
+        var card = await db.CustomerPaymentMethods
+            .FirstOrDefaultAsync(pm => pm.CustomerProfileId == customerProfile.Id && pm.IsDefault, cancellationToken);
+
+        if (card is not null)
+        {
+            var fees = await commissionService.CalculateFeesAsync(
+                request.BudgetCents, Guid.Empty, request.Categories, cancellationToken);
+
+            var chargeResult = await paymentService.ChargeCustomerAsync(
+                card.StripeCustomerId, card.StripePaymentMethodId,
+                fees.GrossAmountCents, "usd", $"escrow_{job.Id}",
+                $"YardGig escrow: {request.Title[..Math.Min(request.Title.Length, 30)]}", cancellationToken);
+
+            if (chargeResult.Succeeded)
+            {
+                db.EscrowTransactions.Add(new EscrowTransaction
+                {
+                    JobRequestId = job.Id,
+                    CustomerProfileId = customerProfile.Id,
+                    StripePaymentIntentId = chargeResult.PaymentIntentId,
+                    AmountCents = fees.GrossAmountCents,
+                    PlatformFeeCents = fees.PlatformFeeCents,
+                    VendorAmountCents = fees.VendorNetCents,
+                    Status = EscrowStatus.Held
+                });
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            // If charge fails, job is still created but without escrow (customer can add card later)
+        }
 
         return Result<Guid>.Success(job.Id);
     }

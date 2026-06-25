@@ -56,6 +56,7 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<AbuseReport> AbuseReports => Set<AbuseReport>();
     public DbSet<VendorBalance> VendorBalances => Set<VendorBalance>();
     public DbSet<CustomerPaymentMethod> CustomerPaymentMethods => Set<CustomerPaymentMethod>();
+    public DbSet<EscrowTransaction> EscrowTransactions => Set<EscrowTransaction>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
