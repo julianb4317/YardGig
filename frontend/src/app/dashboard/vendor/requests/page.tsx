@@ -108,9 +108,9 @@ export default function VendorMyRequestsPage() {
                       <span className={cn("flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium", color)}>
                         <Icon className="h-3.5 w-3.5" /> {req.status}
                       </span>
-                      {req.jobStatus && req.status === "Accepted" && (
-                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                          Job: {req.jobStatus === "InProgress" ? "In Progress" : req.jobStatus}
+                      {req.jobStatus && (
+                        <span className="rounded-full bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 text-xs font-medium">
+                          {req.jobStatus === "InProgress" ? "In Progress" : req.jobStatus}
                         </span>
                       )}
                     </div>

@@ -4,6 +4,11 @@ import { formatCents, cn } from "@/lib/utils";
 import { CATEGORY_LABELS } from "@/lib/types";
 import type { JobDetail } from "@/lib/types";
 
+function displayStatus(status: string): string {
+  if (status === "InProgress") return "In Progress";
+  return status;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   Open: "bg-green-100 text-green-800",
   Requested: "bg-blue-100 text-blue-800",
@@ -25,7 +30,7 @@ export function JobCard({ job }: { job: JobDetail }) {
       <div className="flex items-start justify-between gap-3">
         <h3 className="font-medium text-gray-900 line-clamp-1">{job.title}</h3>
         <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium", STATUS_COLORS[job.status] ?? "bg-gray-100 text-gray-600")}>
-          {job.status === "InProgress" ? "In Progress" : job.status}
+          {displayStatus(job.status)}
         </span>
       </div>
 
