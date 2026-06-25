@@ -19,18 +19,31 @@ public class AuthController(IAuthService authService, ICurrentUserService curren
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
-        var model = new RegisterModel(request.Email, request.Password, request.DisplayName, request.Roles);
-        var result = await authService.RegisterAsync(model);
-
-        if (!result.Succeeded)
-            return BadRequest(new { errors = result.Errors });
-
-        return Ok(new
+        try
         {
-            result.Data!.UserId,
-            result.Data.Roles,
-            message = "Registration successful. Please check your email to verify your account."
-        });
+            var model = new RegisterModel(request.Email, request.Password, request.DisplayName, request.Roles);
+            var result = await authService.RegisterAsync(model);
+
+            if (!result.Succeeded)
+                return BadRequest(new { errors = result.Errors });
+
+            return Ok(new
+            {
+                result.Data!.UserId,
+                result.Data.Roles,
+                message = "Registration successful. Please check your email to verify your account."
+            });
+        }
+        catch (Exception ex)
+        {
+            // Return the actual exception so we can debug
+            return StatusCode(500, new
+            {
+                error = ex.Message,
+                innerError = ex.InnerException?.Message,
+                stackTrace = ex.StackTrace?[..Math.Min(ex.StackTrace?.Length ?? 0, 500)]
+            });
+        }
     }
 
     /// <summary>

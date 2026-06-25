@@ -62,12 +62,18 @@ builder.Services.AddAuthentication(options =>
                 return Task.CompletedTask;
             }
         };
-    })
-    .AddGoogle(options =>
+    });
+
+// Only add Google OAuth if credentials are configured
+var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
+if (!string.IsNullOrEmpty(googleClientId))
+{
+    builder.Services.AddAuthentication().AddGoogle(options =>
     {
-        options.ClientId = builder.Configuration["Authentication:Google:ClientId"] ?? "";
+        options.ClientId = googleClientId;
         options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? "";
     });
+}
 
 builder.Services.AddHttpContextAccessor();
 
@@ -150,10 +156,13 @@ if (app.Environment.IsDevelopment())
 // Middleware pipeline
 if (app.Environment.IsDevelopment())
 {
-    app.UseDeveloperExceptionPage(); // Shows full stack trace for 500 errors in dev
+    app.UseDeveloperExceptionPage();
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// CORS must be before everything else so error responses also get CORS headers
+app.UseCors("AllowFrontend");
 
 app.UseHttpsRedirection();
 
@@ -162,13 +171,12 @@ app.Use(async (context, next) =>
 {
     context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
     context.Response.Headers.Append("X-Frame-Options", "DENY");
-    context.Response.Headers.Append("X-XSS-Protection", "0"); // Modern browsers: CSP is preferred
+    context.Response.Headers.Append("X-XSS-Protection", "0");
     context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
     context.Response.Headers.Append("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)");
     await next();
 });
 
-app.UseCors("AllowFrontend");
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
