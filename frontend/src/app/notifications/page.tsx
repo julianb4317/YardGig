@@ -82,8 +82,20 @@ export default function NotificationsPage() {
 
   const markReadMutation = useMutation({
     mutationFn: markNotificationRead,
-    onSuccess: () => {
-      refetch();
+    onMutate: async (id) => {
+      // Optimistic update: immediately mark as read in the local cache
+      await queryClient.cancelQueries({ queryKey: ["notifications", filter] });
+      const previous = queryClient.getQueryData<any[]>(["notifications", filter]);
+      queryClient.setQueryData(["notifications", filter], (old: any[] | undefined) =>
+        old?.map((n) => n.id === id ? { ...n, isRead: true } : n)
+      );
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      // Revert on failure
+      queryClient.setQueryData(["notifications", filter], context?.previous);
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["unreadCount"] });
     },
   });
