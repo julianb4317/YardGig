@@ -9,6 +9,7 @@ import { fetchRatings } from "@/lib/api/ratings";
 
 interface VendorPublicData {
   id: string;
+  userId: string;
   displayName: string;
   businessName: string | null;
   bio: string | null;
@@ -35,8 +36,8 @@ export function VendorProfileModal({ vendorProfileId, vendorName, open, onClose 
 
   const { data: ratings } = useQuery({
     queryKey: ["vendorRatings", vendorProfileId],
-    queryFn: () => fetchRatings(vendorProfileId, 1, 5),
-    enabled: open && !!vendorProfileId,
+    queryFn: () => fetchRatings(profile!.userId, 1, 5),
+    enabled: open && !!profile?.userId,
   });
 
   if (!open) return null;

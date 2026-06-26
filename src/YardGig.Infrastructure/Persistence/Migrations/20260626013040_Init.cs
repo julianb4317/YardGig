@@ -544,6 +544,34 @@ namespace YardGig.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "JobMessages",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    JobRequestId = table.Column<Guid>(type: "uuid", nullable: false),
+                    SenderUserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Body = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
+                    IsRead = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_JobMessages", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_JobMessages_JobRequests_JobRequestId",
+                        column: x => x.JobRequestId,
+                        principalTable: "JobRequests",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_JobMessages_Users_SenderUserId",
+                        column: x => x.SenderUserId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Ratings",
                 columns: table => new
                 {
@@ -883,6 +911,16 @@ namespace YardGig.Infrastructure.Persistence.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_JobMessages_JobRequestId_CreatedAt",
+                table: "JobMessages",
+                columns: new[] { "JobRequestId", "CreatedAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_JobMessages_SenderUserId",
+                table: "JobMessages",
+                column: "SenderUserId");
+
+            migrationBuilder.CreateIndex(
                 name: "idx_jobrequest_customer",
                 table: "JobRequests",
                 columns: new[] { "CustomerProfileId", "CreatedAt" });
@@ -1073,6 +1111,9 @@ namespace YardGig.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "JobAssignments");
+
+            migrationBuilder.DropTable(
+                name: "JobMessages");
 
             migrationBuilder.DropTable(
                 name: "LedgerEntries");

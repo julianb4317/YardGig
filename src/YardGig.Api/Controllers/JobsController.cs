@@ -165,7 +165,7 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
         // Notify customer about the new request
         var vendorProfile = await db.VendorProfiles.FirstOrDefaultAsync(v => v.UserId == currentUser.UserId);
         if (vendorProfile != null)
-            _ = jobNotifications.NotifyJobRequested(id, vendorProfile.Id);
+            try { await jobNotifications.NotifyJobRequested(id, vendorProfile.Id); } catch { /* notification non-fatal */ }
 
         return Ok(new { vendorRequestId = result.Data });
     }
@@ -186,7 +186,7 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
                 // Notify the assigned vendor
                 var vendorReq = await db.VendorRequests.FirstOrDefaultAsync(vr => vr.Id == body.VendorRequestId);
                 if (vendorReq != null)
-                    _ = jobNotifications.NotifyJobAssigned(id, vendorReq.VendorProfileId);
+                    try { await jobNotifications.NotifyJobAssigned(id, vendorReq.VendorProfileId); } catch { /* notification non-fatal */ }
                 return Ok(new { message = "Vendor assigned." });
             }
             return BadRequest(new { errors = result.Errors });
@@ -226,9 +226,9 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
             {
                 // Send notifications based on status change
                 if (status == YardGig.Domain.Enums.JobStatus.InProgress)
-                    _ = jobNotifications.NotifyJobStarted(id);
+                    try { await jobNotifications.NotifyJobStarted(id); } catch { /* notification non-fatal */ }
                 else if (status == YardGig.Domain.Enums.JobStatus.Completed)
-                    _ = jobNotifications.NotifyJobCompleted(id);
+                    try { await jobNotifications.NotifyJobCompleted(id); } catch { /* notification non-fatal */ }
                 return Ok(new { status = status.ToString() });
             }
             return BadRequest(new { errors = result.Errors });
@@ -268,7 +268,7 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
 
         // Notify all affected vendors
         foreach (var vendorUserId in vendorUserIds.Distinct())
-            _ = jobNotifications.NotifyJobCancelled(id, vendorUserId, job?.Title ?? "Job");
+            try { await jobNotifications.NotifyJobCancelled(id, vendorUserId, job?.Title ?? "Job"); } catch { /* notification non-fatal */ }
 
         return Ok(new { message = "Job cancelled.", result.Data!.PenaltyApplied, result.Data.PenaltyCents });
     }
@@ -287,7 +287,7 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
             // Notify assigned vendor
             var job = await db.JobRequests.Include(j => j.Assignment).ThenInclude(a => a!.VendorProfile).FirstOrDefaultAsync(j => j.Id == id);
             if (job?.Assignment?.VendorProfile != null)
-                _ = jobNotifications.NotifyJobRescheduled(id, job.Assignment.VendorProfile.UserId, job.Title);
+                try { await jobNotifications.NotifyJobRescheduled(id, job.Assignment.VendorProfile.UserId, job.Title); } catch { /* notification non-fatal */ }
             return Ok(new { message = "Schedule updated." });
         }
         return BadRequest(result.Errors);
@@ -318,7 +318,7 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
             // Notify customer
             var job = await db.JobRequests.Include(j => j.CustomerProfile).FirstOrDefaultAsync(j => j.Id == id);
             if (job?.CustomerProfile != null)
-                _ = jobNotifications.NotifyVendorWithdrew(id, job.CustomerProfile.UserId, job.Title);
+                try { await jobNotifications.NotifyVendorWithdrew(id, job.CustomerProfile.UserId, job.Title); } catch { /* notification non-fatal */ }
             return Ok(new { message = "Request withdrawn." });
         }
         return BadRequest(result.Errors);

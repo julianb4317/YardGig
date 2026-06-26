@@ -550,6 +550,38 @@ namespace YardGig.Infrastructure.Persistence.Migrations
                     b.ToTable("JobAssignments", (string)null);
                 });
 
+            modelBuilder.Entity("YardGig.Domain.Entities.JobMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("JobRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SenderUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SenderUserId");
+
+                    b.HasIndex("JobRequestId", "CreatedAt");
+
+                    b.ToTable("JobMessages", (string)null);
+                });
+
             modelBuilder.Entity("YardGig.Domain.Entities.JobRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1454,6 +1486,25 @@ namespace YardGig.Infrastructure.Persistence.Migrations
                     b.Navigation("VendorProfile");
 
                     b.Navigation("VendorRequest");
+                });
+
+            modelBuilder.Entity("YardGig.Domain.Entities.JobMessage", b =>
+                {
+                    b.HasOne("YardGig.Domain.Entities.JobRequest", "JobRequest")
+                        .WithMany()
+                        .HasForeignKey("JobRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("YardGig.Domain.Entities.ApplicationUser", "Sender")
+                        .WithMany()
+                        .HasForeignKey("SenderUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("JobRequest");
+
+                    b.Navigation("Sender");
                 });
 
             modelBuilder.Entity("YardGig.Domain.Entities.JobRequest", b =>

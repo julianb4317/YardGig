@@ -170,6 +170,7 @@ public class ProfilesController(IAppDbContext db, ICurrentUserService currentUse
         return Ok(new
         {
             profile.Id,
+            UserId = profile.UserId,
             DisplayName = profile.User?.DisplayName ?? "Vendor",
             profile.BusinessName,
             profile.Bio,

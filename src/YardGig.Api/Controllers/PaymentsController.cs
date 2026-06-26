@@ -282,7 +282,7 @@ public class PaymentsController(
             await db.SaveChangesAsync();
 
             // Notify vendor of payment
-            _ = jobNotifications.NotifyPaymentReleased(job.Id, vendorProfile.UserId, vendorNetCents);
+            try { await jobNotifications.NotifyPaymentReleased(job.Id, vendorProfile.UserId, vendorNetCents); } catch { /* non-fatal */ }
 
             return Ok(new { transactionId = transaction.Id, vendorEarnedCents = vendorNetCents, vendorUserId = vendorProfile.UserId });
         }
