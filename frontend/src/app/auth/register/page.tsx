@@ -14,8 +14,12 @@ import { Spinner } from "@/components/ui/spinner";
 const registerSchema = z.object({
   email: z.string().email("Valid email required"),
   password: z.string().min(12, "At least 12 characters"),
+  confirmPassword: z.string(),
   displayName: z.string().min(2, "Name required").max(100),
   roles: z.array(z.string()).min(1, "Select at least one role"),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
 });
 
 type RegisterForm = z.infer<typeof registerSchema>;
@@ -29,6 +33,7 @@ export default function RegisterPage() {
   });
 
   const selectedRoles = watch("roles");
+  const passwordValue = watch("password");
 
   const toggleRole = (role: string) => {
     const current = selectedRoles ?? [];
@@ -37,8 +42,10 @@ export default function RegisterPage() {
   };
 
   const mutation = useMutation({
-    mutationFn: (data: RegisterForm) =>
-      apiClient<any>("/api/auth/register", { method: "POST", body: data, skipAuth: true }),
+    mutationFn: (data: RegisterForm) => {
+      const { confirmPassword, ...payload } = data;
+      return apiClient<any>("/api/auth/register", { method: "POST", body: payload, skipAuth: true });
+    },
     onSuccess: (data) => {
       if (data.accessToken) {
         // Registration returned tokens — go directly to dashboard
@@ -101,6 +108,19 @@ export default function RegisterPage() {
           {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password.message}</p>}
           <p className="mt-1 text-xs text-gray-400">Min 12 chars, uppercase, lowercase, digit, special character.</p>
         </div>
+
+        {passwordValue && passwordValue.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Confirm Password</label>
+            <input
+              {...register("confirmPassword")}
+              type="password"
+              autoComplete="new-password"
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+            {errors.confirmPassword && <p className="mt-1 text-xs text-red-600">{errors.confirmPassword.message}</p>}
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">I want to…</label>

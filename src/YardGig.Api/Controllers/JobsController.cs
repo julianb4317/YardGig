@@ -186,7 +186,22 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
                 // Notify the assigned vendor
                 var vendorReq = await db.VendorRequests.FirstOrDefaultAsync(vr => vr.Id == body.VendorRequestId);
                 if (vendorReq != null)
+                {
                     try { await jobNotifications.NotifyJobAssigned(id, vendorReq.VendorProfileId); } catch { /* notification non-fatal */ }
+
+                    // If this is a recurring job template, assign vendor to the series too
+                    var job = await db.JobRequests.FirstOrDefaultAsync(j => j.Id == id);
+                    if (job is { IsRecurring: true })
+                    {
+                        var series = await db.RecurringJobSeries
+                            .FirstOrDefaultAsync(s => s.TemplateJobId == id);
+                        if (series != null)
+                        {
+                            series.AssignedVendorProfileId = vendorReq.VendorProfileId;
+                            await db.SaveChangesAsync();
+                        }
+                    }
+                }
                 return Ok(new { message = "Vendor assigned." });
             }
             return BadRequest(new { errors = result.Errors });

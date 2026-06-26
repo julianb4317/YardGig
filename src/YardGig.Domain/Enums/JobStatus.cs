@@ -11,5 +11,6 @@ public enum JobStatus
     Paid,
     Closed,
     Cancelled,
-    Disputed
+    Disputed,
+    Expired
 }

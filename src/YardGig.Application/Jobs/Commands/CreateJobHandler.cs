@@ -53,6 +53,15 @@ public class CreateJobHandler(
         if (location is null)
             return Result<Guid>.Failure("We couldn't locate this address. Please refine it.");
 
+        // For recurring jobs, verify card exists (payment charged per occurrence, not upfront)
+        if (request.IsRecurring)
+        {
+            var hasCard = await db.CustomerPaymentMethods
+                .AnyAsync(pm => pm.CustomerProfileId == customerProfile.Id && pm.IsDefault, cancellationToken);
+            if (!hasCard)
+                return Result<Guid>.Failure("A payment method is required for recurring jobs. Please add a card first.");
+        }
+
         var job = new JobRequest
         {
             CustomerProfileId = customerProfile.Id,
@@ -66,7 +75,11 @@ public class CreateJobHandler(
             ScheduleStart = request.ScheduleStart,
             ScheduleEnd = request.ScheduleEnd,
             Photos = request.Photos?.ToList(),
-            ExpiresAt = DateTime.UtcNow.AddDays(7)
+            ExpiresAt = DateTime.UtcNow.AddDays(7),
+            IsRecurring = request.IsRecurring,
+            RecurringFrequency = request.RecurringFrequency,
+            RecurringDays = request.RecurringDays?.ToList(),
+            RecurringTime = request.RecurringTime
         };
 
         job.AddDomainEvent(new JobCreatedEvent(job.Id));
@@ -74,7 +87,26 @@ public class CreateJobHandler(
         db.JobRequests.Add(job);
         await db.SaveChangesAsync(cancellationToken);
 
-        // ESCROW: Charge customer's card and hold funds
+        // For recurring jobs, create the series (no upfront escrow — charged per occurrence)
+        if (request.IsRecurring)
+        {
+            var series = new RecurringJobSeries
+            {
+                CustomerProfileId = customerProfile.Id,
+                TemplateJobId = job.Id,
+                Frequency = request.RecurringFrequency ?? "weekly",
+                Days = request.RecurringDays?.ToList() ?? [],
+                Time = request.RecurringTime ?? "09:00",
+                Status = RecurringSeriesStatus.Active,
+            };
+            series.NextOccurrence = CalculateNextOccurrenceForNew(series);
+            db.RecurringJobSeries.Add(series);
+            await db.SaveChangesAsync(cancellationToken);
+
+            return Result<Guid>.Success(job.Id);
+        }
+
+        // ESCROW: Charge customer's card and hold funds (one-off jobs only)
         var card = await db.CustomerPaymentMethods
             .FirstOrDefaultAsync(pm => pm.CustomerProfileId == customerProfile.Id && pm.IsDefault, cancellationToken);
 
@@ -106,5 +138,27 @@ public class CreateJobHandler(
         }
 
         return Result<Guid>.Success(job.Id);
+    }
+
+    private static DateTime? CalculateNextOccurrenceForNew(RecurringJobSeries series)
+    {
+        if (series.Days.Count == 0) return null;
+
+        var timeParts = series.Time.Split(':');
+        var hour = int.Parse(timeParts[0]);
+        var minute = timeParts.Length > 1 ? int.Parse(timeParts[1]) : 0;
+
+        // Find the next matching day from today
+        var candidate = DateTime.UtcNow.Date.AddDays(1);
+        for (var i = 0; i < 30; i++)
+        {
+            if (series.Days.Contains(candidate.DayOfWeek.ToString()))
+            {
+                return new DateTime(candidate.Year, candidate.Month, candidate.Day, hour, minute, 0, DateTimeKind.Utc);
+            }
+            candidate = candidate.AddDays(1);
+        }
+
+        return DateTime.UtcNow.Date.AddDays(7).AddHours(hour).AddMinutes(minute);
     }
 }

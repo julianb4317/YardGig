@@ -98,6 +98,9 @@ public static class DependencyInjection
         services.AddScoped<IPushProvider, LogPushProvider>();
         services.AddHostedService<OutboxProcessor>();
 
+        // Recurring jobs
+        services.AddHostedService<RecurringJobSpawner>();
+
         return services;
     }
 }

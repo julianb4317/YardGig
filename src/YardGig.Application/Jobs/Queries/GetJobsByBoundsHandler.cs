@@ -23,7 +23,9 @@ public class GetJobsByBoundsHandler(IAppDbContext db) : IRequestHandler<GetJobsB
         // This avoids PostGIS geography vs geometry translation issues
         var query = db.JobRequests
             .AsNoTracking()
-            .Where(j => j.Status == JobStatus.Open || j.Status == JobStatus.Requested);
+            .Where(j => j.Status == JobStatus.Open || j.Status == JobStatus.Requested)
+            // Exclude jobs whose end date has passed (expired)
+            .Where(j => !j.ScheduleEnd.HasValue || j.ScheduleEnd.Value >= DateTime.UtcNow);
 
         // Category filter
         if (request.Categories is { Length: > 0 })

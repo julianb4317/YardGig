@@ -23,6 +23,10 @@ public class JobRequestConfiguration : IEntityTypeConfiguration<JobRequest>
             .HasColumnType("geometry (point, 4326)")
             .IsRequired();
 
+        // Recurring fields
+        builder.Property(j => j.RecurringFrequency).HasMaxLength(20);
+        builder.Property(j => j.RecurringTime).HasMaxLength(10);
+
         // Partial index: open jobs by creation date
         builder.HasIndex(j => new { j.Status, j.CreatedAt })
             .HasDatabaseName("idx_jobrequest_status_created")

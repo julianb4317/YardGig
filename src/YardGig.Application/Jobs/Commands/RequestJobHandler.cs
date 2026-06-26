@@ -54,6 +54,15 @@ public class RequestJobHandler(
         if (job is null)
             return Result<Guid>.Failure("Job not found.");
 
+        // Auto-expire if end date passed
+        if (job.ScheduleEnd.HasValue && job.ScheduleEnd.Value < DateTime.UtcNow
+            && (job.Status == JobStatus.Open || job.Status == JobStatus.Requested))
+        {
+            job.Status = JobStatus.Expired;
+            await db.SaveChangesAsync(cancellationToken);
+            return Result<Guid>.Failure("This job has expired.");
+        }
+
         if (job.Status != JobStatus.Open && job.Status != JobStatus.Requested)
             return Result<Guid>.Failure("Job is no longer open for requests.");
 

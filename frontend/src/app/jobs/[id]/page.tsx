@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowLeft, Calendar, MapPin, Tag, DollarSign, Clock } from "lucide-react";
+import { ArrowLeft, Calendar, MapPin, Tag, DollarSign, Clock, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { ErrorState } from "@/components/ui/error-state";
@@ -26,6 +26,7 @@ const STATUS_COLORS: Record<string, string> = {
   Paid: "bg-emerald-100 text-emerald-800",
   Closed: "bg-gray-100 text-gray-600",
   Cancelled: "bg-red-100 text-red-700",
+  Expired: "bg-amber-100 text-amber-800",
 };
 
 export default function JobDetailPage() {
@@ -107,6 +108,27 @@ export default function JobDetailPage() {
           <p className="mt-2 text-gray-700 whitespace-pre-wrap">{job.description}</p>
         </div>
 
+        {/* Recurring schedule info */}
+        {job.isRecurring && (
+          <div className="mt-4 rounded-lg border border-brand-200 bg-brand-50 p-4">
+            <div className="flex items-center gap-2">
+              <RefreshCw className="h-4 w-4 text-brand-600" />
+              <span className="text-sm font-medium text-brand-800">Recurring Job</span>
+            </div>
+            <div className="mt-2 text-sm text-brand-700 space-y-1">
+              {job.recurringFrequency && (
+                <p>Frequency: <span className="font-medium capitalize">{job.recurringFrequency}</span></p>
+              )}
+              {job.recurringDays && job.recurringDays.length > 0 && (
+                <p>Days: <span className="font-medium">{job.recurringDays.join(", ")}</span></p>
+              )}
+              {job.recurringTime && (
+                <p>Preferred time: <span className="font-medium">{job.recurringTime}</span></p>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Photos */}
         {job.photos && job.photos.length > 0 && (
           <div className="mt-6">
@@ -124,6 +146,11 @@ export default function JobDetailPage() {
         {/* Job Actions */}
         <div className="mt-8 border-t pt-6 space-y-4">
           <JobActions job={job} />
+
+          {/* Post Again button for past jobs */}
+          {hasRole("Customer") && ["Paid", "Closed", "Cancelled", "Expired"].includes(job.status) && (
+            <PostAgainButton job={job} />
+          )}
 
           {/* Customer: payment button when completed */}
           {hasRole("Customer") && job.status === "Completed" && (
@@ -175,5 +202,36 @@ function VendorRequestSection({ jobId, jobTitle }: { jobId: string; jobTitle: st
         onClose={() => setDialogOpen(false)}
       />
     </>
+  );
+}
+
+function PostAgainButton({ job }: { job: { title: string; description: string; categories: string[]; address: string; budgetCents: number; isRecurring?: boolean; recurringFrequency?: string | null; recurringDays?: string[] | null; recurringTime?: string | null } }) {
+  const router = useRouter();
+
+  const handlePostAgain = () => {
+    const params = new URLSearchParams({
+      title: job.title,
+      description: job.description,
+      categories: job.categories.join(","),
+      address: job.address,
+      budget: String(job.budgetCents / 100),
+    });
+    if (job.isRecurring) {
+      params.set("isRecurring", "true");
+      if (job.recurringFrequency) params.set("recurringFrequency", job.recurringFrequency);
+      if (job.recurringDays) params.set("recurringDays", job.recurringDays.join(","));
+      if (job.recurringTime) params.set("recurringTime", job.recurringTime);
+    }
+    router.push(`/jobs/create?${params}`);
+  };
+
+  return (
+    <button
+      onClick={handlePostAgain}
+      className="inline-flex items-center gap-2 rounded-md border border-brand-600 px-4 py-2 text-sm font-medium text-brand-600 hover:bg-brand-50"
+    >
+      <RefreshCw className="h-4 w-4" />
+      Post Again
+    </button>
   );
 }

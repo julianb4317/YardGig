@@ -21,6 +21,7 @@ const STATUS_TABS = [
   { value: "InProgress", label: "In Progress" },
   { value: "Completed", label: "Completed" },
   { value: "Paid", label: "Paid" },
+  { value: "Expired", label: "Expired" },
 ];
 
 function CustomerJobsList() {

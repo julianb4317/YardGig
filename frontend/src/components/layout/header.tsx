@@ -24,12 +24,16 @@ export function Header() {
   const navLinks = authenticated
     ? [
         ...(user?.roles.includes("Customer")
-          ? [{ href: "/dashboard/customer", label: "My Jobs" }]
+          ? [
+              { href: "/dashboard/customer", label: "My Jobs" },
+              { href: "/jobs/recurring", label: "Recurring" },
+            ]
           : []),
         ...(user?.roles.includes("Vendor")
           ? [
               { href: "/dashboard/vendor", label: "Find Jobs" },
               { href: "/dashboard/vendor/requests", label: "My Requests" },
+              { href: "/dashboard/vendor/schedule", label: "Schedule" },
               { href: "/dashboard/vendor/earnings", label: "My Earnings" },
             ]
           : []),

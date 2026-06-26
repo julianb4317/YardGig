@@ -11,11 +11,11 @@ using YardGig.Infrastructure.Persistence;
 
 #nullable disable
 
-namespace YardGig.Infrastructure.Persistence.Migrations
+namespace YardGig.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260626013040_Init")]
-    partial class Init
+    [Migration("20260626233653_InitFresh")]
+    partial class InitFresh
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -615,12 +615,29 @@ namespace YardGig.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("ExpiresAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<bool>("IsRecurring")
+                        .HasColumnType("boolean");
+
                     b.Property<Point>("Location")
                         .IsRequired()
                         .HasColumnType("geometry (point, 4326)");
 
+                    b.Property<Guid?>("ParentJobId")
+                        .HasColumnType("uuid");
+
                     b.PrimitiveCollection<List<string>>("Photos")
                         .HasColumnType("text[]");
+
+                    b.PrimitiveCollection<List<string>>("RecurringDays")
+                        .HasColumnType("text[]");
+
+                    b.Property<string>("RecurringFrequency")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("RecurringTime")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<DateTime?>("ScheduleEnd")
                         .HasColumnType("timestamp without time zone");
@@ -1059,6 +1076,69 @@ namespace YardGig.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Ratings", (string)null);
+                });
+
+            modelBuilder.Entity("YardGig.Domain.Entities.RecurringJobSeries", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AssignedVendorProfileId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("CustomerProfileId")
+                        .HasColumnType("uuid");
+
+                    b.PrimitiveCollection<List<string>>("Days")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("LastSpawnedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("NextOccurrence")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("TemplateJobId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Time")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<int>("TotalOccurrences")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignedVendorProfileId");
+
+                    b.HasIndex("CustomerProfileId");
+
+                    b.HasIndex("TemplateJobId");
+
+                    b.HasIndex("Status", "NextOccurrence")
+                        .HasDatabaseName("idx_recurring_status_next");
+
+                    b.ToTable("RecurringJobSeries", (string)null);
                 });
 
             modelBuilder.Entity("YardGig.Domain.Entities.Role", b =>
@@ -1618,6 +1698,31 @@ namespace YardGig.Infrastructure.Persistence.Migrations
                     b.Navigation("Reviewee");
 
                     b.Navigation("Reviewer");
+                });
+
+            modelBuilder.Entity("YardGig.Domain.Entities.RecurringJobSeries", b =>
+                {
+                    b.HasOne("YardGig.Domain.Entities.VendorProfile", "AssignedVendorProfile")
+                        .WithMany()
+                        .HasForeignKey("AssignedVendorProfileId");
+
+                    b.HasOne("YardGig.Domain.Entities.CustomerProfile", "CustomerProfile")
+                        .WithMany()
+                        .HasForeignKey("CustomerProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("YardGig.Domain.Entities.JobRequest", "TemplateJob")
+                        .WithMany()
+                        .HasForeignKey("TemplateJobId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AssignedVendorProfile");
+
+                    b.Navigation("CustomerProfile");
+
+                    b.Navigation("TemplateJob");
                 });
 
             modelBuilder.Entity("YardGig.Domain.Entities.UserDevice", b =>

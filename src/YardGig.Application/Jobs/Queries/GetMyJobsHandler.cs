@@ -19,7 +19,8 @@ public class GetMyJobsHandler(IAppDbContext db) : IRequestHandler<GetMyJobsQuery
         [JobStatus.Paid] = 6,
         [JobStatus.Closed] = 7,
         [JobStatus.Cancelled] = 8,
-        [JobStatus.Draft] = 9,
+        [JobStatus.Expired] = 9,
+        [JobStatus.Draft] = 10,
     };
 
     public async Task<PaginatedResult<JobDetailDto>> Handle(GetMyJobsQuery request, CancellationToken cancellationToken)
@@ -35,7 +36,23 @@ public class GetMyJobsHandler(IAppDbContext db) : IRequestHandler<GetMyJobsQuery
 
         if (!string.IsNullOrWhiteSpace(request.Status) && Enum.TryParse<JobStatus>(request.Status, true, out var status))
         {
-            query = query.Where(j => j.Status == status);
+            if (status == JobStatus.Expired)
+            {
+                // Expired tab: show explicitly expired OR open/requested with past end date
+                query = query.Where(j => j.Status == JobStatus.Expired
+                    || ((j.Status == JobStatus.Open || j.Status == JobStatus.Requested)
+                        && j.ScheduleEnd.HasValue && j.ScheduleEnd.Value < DateTime.UtcNow));
+            }
+            else if (status == JobStatus.Open || status == JobStatus.Requested)
+            {
+                // Exclude jobs that should be expired
+                query = query.Where(j => j.Status == status
+                    && (!j.ScheduleEnd.HasValue || j.ScheduleEnd.Value >= DateTime.UtcNow));
+            }
+            else
+            {
+                query = query.Where(j => j.Status == status);
+            }
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -72,7 +89,10 @@ public class GetMyJobsHandler(IAppDbContext db) : IRequestHandler<GetMyJobsQuery
                 j.Address,
                 j.Location?.Y ?? 0,
                 j.Location?.X ?? 0,
-                j.Status.ToString(),
+                // Auto-expire if end date passed
+                (j.ScheduleEnd.HasValue && j.ScheduleEnd.Value < DateTime.UtcNow
+                    && (j.Status == JobStatus.Open || j.Status == JobStatus.Requested))
+                    ? "Expired" : j.Status.ToString(),
                 j.BudgetCents,
                 j.ScheduleStart,
                 j.ScheduleEnd,
@@ -81,7 +101,11 @@ public class GetMyJobsHandler(IAppDbContext db) : IRequestHandler<GetMyJobsQuery
                 j.CustomerProfileId,
                 pendingCount,
                 assignedVendorName,
-                assignedVendorUserId
+                assignedVendorUserId,
+                j.IsRecurring,
+                j.RecurringFrequency,
+                j.RecurringDays?.ToArray(),
+                j.RecurringTime
             );
         }).ToList();
 

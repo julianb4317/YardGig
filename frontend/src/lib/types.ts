@@ -7,7 +7,7 @@
 
 export const JobStatuses = [
   "Draft", "Open", "Requested", "Assigned", "InProgress",
-  "Completed", "Paid", "Closed", "Cancelled", "Disputed",
+  "Completed", "Paid", "Closed", "Cancelled", "Disputed", "Expired",
 ] as const;
 export type JobStatus = (typeof JobStatuses)[number];
 
@@ -37,6 +37,10 @@ export interface JobDetail {
   pendingRequestCount?: number;
   assignedVendorName?: string | null;
   assignedVendorUserId?: string | null;
+  isRecurring?: boolean;
+  recurringFrequency?: string | null;
+  recurringDays?: string[] | null;
+  recurringTime?: string | null;
 }
 
 export interface MapPin {

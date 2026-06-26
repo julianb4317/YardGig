@@ -17,5 +17,9 @@ public record JobDetailDto(
     Guid CustomerProfileId,
     int PendingRequestCount = 0,
     string? AssignedVendorName = null,
-    Guid? AssignedVendorUserId = null
+    Guid? AssignedVendorUserId = null,
+    bool IsRecurring = false,
+    string? RecurringFrequency = null,
+    string[]? RecurringDays = null,
+    string? RecurringTime = null
 );

@@ -8,7 +8,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
 
-namespace YardGig.Infrastructure.Persistence.Migrations
+namespace YardGig.Infrastructure.Migrations
 {
     /// <inheritdoc />
     public partial class Init : Migration
@@ -406,6 +406,11 @@ namespace YardGig.Infrastructure.Persistence.Migrations
                     ScheduleEnd = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
                     Photos = table.Column<List<string>>(type: "text[]", nullable: true),
                     ExpiresAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: true),
+                    IsRecurring = table.Column<bool>(type: "boolean", nullable: false),
+                    RecurringFrequency = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    RecurringDays = table.Column<List<string>>(type: "text[]", nullable: true),
+                    RecurringTime = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: true),
+                    ParentJobId = table.Column<Guid>(type: "uuid", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp without time zone", nullable: false)
                 },

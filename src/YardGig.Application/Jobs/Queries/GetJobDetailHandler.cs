@@ -12,7 +12,6 @@ public class GetJobDetailHandler(IAppDbContext db) : IRequestHandler<GetJobDetai
     public async Task<Result<JobDetailDto>> Handle(GetJobDetailQuery request, CancellationToken cancellationToken)
     {
         var j = await db.JobRequests
-            .AsNoTracking()
             .Include(x => x.VendorRequests)
             .Include(x => x.Assignment!)
                 .ThenInclude(a => a.VendorProfile)
@@ -47,6 +46,16 @@ public class GetJobDetailHandler(IAppDbContext db) : IRequestHandler<GetJobDetai
             }
         }
 
+        // Auto-expire if end date has passed and job is still open/requested
+        var effectiveStatus = j.Status;
+        if (j.ScheduleEnd.HasValue && j.ScheduleEnd.Value < DateTime.UtcNow
+            && (j.Status == JobStatus.Open || j.Status == JobStatus.Requested))
+        {
+            effectiveStatus = JobStatus.Expired;
+            j.Status = JobStatus.Expired;
+            await db.SaveChangesAsync(cancellationToken);
+        }
+
         var dto = new JobDetailDto(
             j.Id,
             j.Title,
@@ -55,7 +64,7 @@ public class GetJobDetailHandler(IAppDbContext db) : IRequestHandler<GetJobDetai
             j.Address,
             j.Location?.Y ?? 0,
             j.Location?.X ?? 0,
-            j.Status.ToString(),
+            effectiveStatus.ToString(),
             j.BudgetCents,
             j.ScheduleStart,
             j.ScheduleEnd,
@@ -64,7 +73,11 @@ public class GetJobDetailHandler(IAppDbContext db) : IRequestHandler<GetJobDetai
             j.CustomerProfileId,
             pendingCount,
             assignedVendorName,
-            assignedVendorUserId
+            assignedVendorUserId,
+            j.IsRecurring,
+            j.RecurringFrequency,
+            j.RecurringDays?.ToArray(),
+            j.RecurringTime
         );
 
         return Result<JobDetailDto>.Success(dto);

@@ -35,6 +35,10 @@ export interface CreateJobPayload {
   scheduleStart?: string;
   scheduleEnd?: string;
   photos?: string[];
+  isRecurring?: boolean;
+  recurringFrequency?: string;
+  recurringDays?: string[];
+  recurringTime?: string;
 }
 
 export function createJob(payload: CreateJobPayload) {

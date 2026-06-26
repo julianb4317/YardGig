@@ -19,6 +19,13 @@ public class JobRequest : AggregateRoot
     public List<string>? Photos { get; set; }
     public DateTime? ExpiresAt { get; set; }
 
+    // Recurring schedule
+    public bool IsRecurring { get; set; }
+    public string? RecurringFrequency { get; set; } // "weekly", "biweekly", "monthly"
+    public List<string>? RecurringDays { get; set; } // ["Monday", "Wednesday"]
+    public string? RecurringTime { get; set; } // "09:00"
+    public Guid? ParentJobId { get; set; } // links to original recurring job
+
     // Navigation
     public CustomerProfile CustomerProfile { get; set; } = null!;
     public ICollection<VendorRequest> VendorRequests { get; set; } = [];

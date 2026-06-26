@@ -58,6 +58,7 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<CustomerPaymentMethod> CustomerPaymentMethods => Set<CustomerPaymentMethod>();
     public DbSet<EscrowTransaction> EscrowTransactions => Set<EscrowTransaction>();
     public DbSet<JobMessage> JobMessages => Set<JobMessage>();
+    public DbSet<RecurringJobSeries> RecurringJobSeries => Set<RecurringJobSeries>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {

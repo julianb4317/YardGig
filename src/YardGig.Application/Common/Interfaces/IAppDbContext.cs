@@ -34,6 +34,7 @@ public interface IAppDbContext
     DbSet<CustomerPaymentMethod> CustomerPaymentMethods { get; }
     DbSet<EscrowTransaction> EscrowTransactions { get; }
     DbSet<JobMessage> JobMessages { get; }
+    DbSet<RecurringJobSeries> RecurringJobSeries { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

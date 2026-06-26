@@ -11,5 +11,9 @@ public record CreateJobCommand(
     int BudgetCents,
     DateTime? ScheduleStart,
     DateTime? ScheduleEnd,
-    string[]? Photos
+    string[]? Photos,
+    bool IsRecurring = false,
+    string? RecurringFrequency = null,
+    string[]? RecurringDays = null,
+    string? RecurringTime = null
 ) : IRequest<Result<Guid>>;
