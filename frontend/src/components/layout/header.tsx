@@ -30,6 +30,7 @@ export function Header() {
           ? [
               { href: "/dashboard/vendor", label: "Find Jobs" },
               { href: "/dashboard/vendor/requests", label: "My Requests" },
+              { href: "/dashboard/vendor/earnings", label: "My Earnings" },
             ]
           : []),
         ...(user?.roles.includes("Admin") || user?.roles.includes("Owner")

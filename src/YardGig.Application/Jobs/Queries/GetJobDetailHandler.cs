@@ -23,9 +23,29 @@ public class GetJobDetailHandler(IAppDbContext db) : IRequestHandler<GetJobDetai
             return Result<JobDetailDto>.Failure("Job not found.");
 
         var pendingCount = j.VendorRequests?.Count(vr => vr.Status == VendorRequestStatus.Pending) ?? 0;
-        var assignedVendorName = j.Assignment?.VendorProfile?.User?.DisplayName
-            ?? j.Assignment?.VendorProfile?.BusinessName;
-        var assignedVendorUserId = j.Assignment?.VendorProfile?.UserId;
+        string? assignedVendorName = null;
+        Guid? assignedVendorUserId = null;
+
+        if (j.Assignment?.VendorProfile != null)
+        {
+            var vp = j.Assignment.VendorProfile;
+            assignedVendorName = !string.IsNullOrEmpty(vp.BusinessName) ? vp.BusinessName
+                : vp.User?.DisplayName ?? vp.User?.Email ?? "Assigned Vendor";
+            assignedVendorUserId = vp.UserId;
+        }
+        else
+        {
+            // Fallback: query assignment directly if Include didn't load it
+            var assignment = await db.JobAssignments.AsNoTracking()
+                .Include(a => a.VendorProfile)
+                .FirstOrDefaultAsync(a => a.JobRequestId == j.Id, cancellationToken);
+            if (assignment?.VendorProfile != null)
+            {
+                assignedVendorName = !string.IsNullOrEmpty(assignment.VendorProfile.BusinessName)
+                    ? assignment.VendorProfile.BusinessName : "Assigned Vendor";
+                assignedVendorUserId = assignment.VendorProfile.UserId;
+            }
+        }
 
         var dto = new JobDetailDto(
             j.Id,

@@ -10,6 +10,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageLoader } from "@/components/ui/spinner";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { VendorProfileModal } from "@/components/profiles/vendor-profile-modal";
 import { fetchJobRequests, assignVendor } from "@/lib/api/jobs";
 import { ApiError } from "@/lib/api-client";
 import type { VendorRequestDto } from "@/lib/types";
@@ -24,13 +25,19 @@ function VendorRequestCard({
   onAccept: (vendorRequestId: string) => void;
   isAssigning: boolean;
 }) {
+  const [profileOpen, setProfileOpen] = useState(false);
   const distanceMiles = req.distanceMeters ? (req.distanceMeters / 1609.34).toFixed(1) : null;
 
   return (
     <div className="rounded-lg border border-gray-200 p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-medium text-gray-900">{req.vendorName}</h3>
+          <button
+            onClick={() => setProfileOpen(true)}
+            className="font-medium text-brand-600 hover:text-brand-700 hover:underline text-left"
+          >
+            {req.vendorName}
+          </button>
           {req.businessName && <p className="text-sm text-gray-500">{req.businessName}</p>}
         </div>
         <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
@@ -75,6 +82,13 @@ function VendorRequestCard({
           </button>
         </div>
       )}
+
+      <VendorProfileModal
+        vendorProfileId={req.vendorProfileId}
+        vendorName={req.vendorName}
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+      />
     </div>
   );
 }
