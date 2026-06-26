@@ -32,7 +32,15 @@ export function JobChat({ jobId }: JobChatProps) {
     queryKey: ["jobMessages", jobId],
     queryFn: () => apiClient<ChatMessage[]>(`/api/jobs/${jobId}/messages`),
     enabled: isOpen,
-    refetchInterval: isOpen ? 5000 : false, // Poll every 5s when open
+    refetchInterval: isOpen ? 5000 : false,
+  });
+
+  // Poll for unread count even when chat is closed
+  const { data: unreadMessages } = useQuery({
+    queryKey: ["jobMessagesUnread", jobId],
+    queryFn: () => apiClient<ChatMessage[]>(`/api/jobs/${jobId}/messages?limit=50`),
+    enabled: !isOpen,
+    refetchInterval: 15000,
   });
 
   const sendMutation = useMutation({
@@ -63,7 +71,9 @@ export function JobChat({ jobId }: JobChatProps) {
     }
   };
 
-  const unreadCount = messages?.filter((m) => !m.isMe && !m.isRead).length ?? 0;
+  const unreadCount = isOpen
+    ? (messages?.filter((m) => !m.isMe && !m.isRead).length ?? 0)
+    : (unreadMessages?.filter((m) => !m.isMe && !m.isRead).length ?? 0);
 
   if (!isOpen) {
     return (

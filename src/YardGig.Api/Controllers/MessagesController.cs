@@ -39,23 +39,29 @@ public class MessagesController(IAppDbContext db, ICurrentUserService currentUse
         if (!isCustomer && !isVendor)
             return Forbid();
 
-        var messages = await db.JobMessages
+        var rawMessages = await db.JobMessages
             .AsNoTracking()
-            .Include(m => m.Sender)
             .Where(m => m.JobRequestId == jobId)
             .OrderBy(m => m.CreatedAt)
             .Take(limit)
-            .Select(m => new
-            {
-                m.Id,
-                m.SenderUserId,
-                SenderName = m.Sender.DisplayName,
-                m.Body,
-                m.CreatedAt,
-                m.IsRead,
-                IsMe = m.SenderUserId == currentUser.UserId.Value
-            })
             .ToListAsync();
+
+        // Get sender names
+        var senderIds = rawMessages.Select(m => m.SenderUserId).Distinct().ToList();
+        var senderNames = await db.Users.AsNoTracking()
+            .Where(u => senderIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.DisplayName);
+
+        var messages = rawMessages.Select(m => new
+        {
+            m.Id,
+            m.SenderUserId,
+            SenderName = senderNames.GetValueOrDefault(m.SenderUserId, "User"),
+            m.Body,
+            m.CreatedAt,
+            m.IsRead,
+            IsMe = m.SenderUserId == currentUser.UserId!.Value
+        }).ToList();
 
         // Mark unread messages from other user as read
         var unread = await db.JobMessages

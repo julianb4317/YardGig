@@ -48,11 +48,11 @@ function NotificationRow({ item, onMarkRead }: { item: NotificationItem; onMarkR
       {!item.isRead && (
         <button
           onClick={() => onMarkRead(item.id)}
-          className="shrink-0 rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+          className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50 border border-brand-200"
           aria-label={`Mark "${item.title}" as read`}
           title="Mark as read"
         >
-          <Check className="h-4 w-4" />
+          Mark read
         </button>
       )}
     </div>

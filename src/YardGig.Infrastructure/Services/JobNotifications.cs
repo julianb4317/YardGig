@@ -15,9 +15,15 @@ public class JobNotifications(IAppDbContext db, INotificationService notificatio
         var vendor = await db.VendorProfiles.Include(v => v.User).FirstOrDefaultAsync(v => v.Id == vendorProfileId, ct);
         if (job?.CustomerProfile == null || vendor == null) return;
 
+        // Send to the CUSTOMER (job owner), not the vendor
+        var customerUserId = job.CustomerProfile.UserId;
         var vendorName = vendor.BusinessName ?? vendor.User?.DisplayName ?? "A vendor";
+        
+        // Don't notify yourself
+        if (customerUserId == vendor.UserId) return;
+        
         await notifications.SendInAppNotificationAsync(
-            job.CustomerProfile.UserId, "job_requested",
+            customerUserId, "job_requested",
             $"New request for \"{job.Title}\"",
             $"{vendorName} wants to do your job.",
             new { jobId }, ct);
