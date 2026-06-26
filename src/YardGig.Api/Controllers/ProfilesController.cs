@@ -161,16 +161,22 @@ public class ProfilesController(IAppDbContext db, ICurrentUserService currentUse
 
         if (profile is null) return NotFound();
 
+        // Calculate actual completed jobs count from assignments
+        var actualJobsCompleted = await db.JobAssignments
+            .CountAsync(ja => ja.VendorProfileId == vendorProfileId && ja.ConfirmedAt != null);
+
+        var jobsCount = Math.Max(profile.TotalJobsCompleted, actualJobsCompleted);
+
         return Ok(new
         {
             profile.Id,
-            DisplayName = profile.User.DisplayName,
+            DisplayName = profile.User?.DisplayName ?? "Vendor",
             profile.BusinessName,
             profile.Bio,
             profile.ServiceCategories,
             profile.VerificationStatus,
             profile.AverageRating,
-            profile.TotalJobsCompleted,
+            TotalJobsCompleted = jobsCount,
             MemberSince = profile.CreatedAt
         });
     }

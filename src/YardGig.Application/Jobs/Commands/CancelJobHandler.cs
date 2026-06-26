@@ -8,8 +8,7 @@ namespace YardGig.Application.Jobs.Commands;
 
 public class CancelJobHandler(
     IAppDbContext db,
-    ICurrentUserService currentUser,
-    INotificationService notifications
+    ICurrentUserService currentUser
 ) : IRequestHandler<CancelJobCommand, Result<CancelJobResult>>
 {
     private const int LateCancelPenaltyCents = 500; // $5
@@ -56,7 +55,6 @@ public class CancelJobHandler(
         // Reject all pending vendor requests
         var pendingRequests = await db.VendorRequests
             .Include(vr => vr.VendorProfile)
-                .ThenInclude(vp => vp.User)
             .Where(vr => vr.JobRequestId == request.JobRequestId && vr.Status == VendorRequestStatus.Pending)
             .ToListAsync(cancellationToken);
 
@@ -64,29 +62,11 @@ public class CancelJobHandler(
         {
             vr.Status = VendorRequestStatus.Rejected;
             vr.UpdatedAt = DateTime.UtcNow;
-
-            await notifications.SendInAppNotificationAsync(
-                vr.VendorProfile.UserId,
-                "job_cancelled",
-                "Job cancelled by customer",
-                $"The job \"{job.Title}\" has been cancelled.",
-                new { jobId = job.Id },
-                cancellationToken);
         }
 
-        // Notify assigned vendor
+        // Remove assignment if exists
         if (job.Assignment is not null)
         {
-            var vendorUserId = job.Assignment.VendorProfile.UserId;
-            await notifications.SendInAppNotificationAsync(
-                vendorUserId,
-                "assignment_cancelled",
-                penaltyApplied ? "Job cancelled (late - compensation applied)" : "Job cancelled by customer",
-                $"The job \"{job.Title}\" has been cancelled by the customer.",
-                new { jobId = job.Id, penaltyApplied, penaltyCents },
-                cancellationToken);
-
-            // Remove assignment
             db.JobAssignments.Remove(job.Assignment);
         }
 

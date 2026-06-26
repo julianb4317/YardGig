@@ -88,6 +88,7 @@ public static class DependencyInjection
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IJobMapNotifier, SignalRJobMapNotifier>();
+        services.AddScoped<JobNotifications>();
 
         // Notification system
         services.AddScoped<INotificationDispatcher, NotificationDispatcher>();

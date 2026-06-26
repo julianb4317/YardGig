@@ -8,8 +8,7 @@ namespace YardGig.Application.Jobs.Commands;
 
 public class WithdrawRequestHandler(
     IAppDbContext db,
-    ICurrentUserService currentUser,
-    INotificationService notifications
+    ICurrentUserService currentUser
 ) : IRequestHandler<WithdrawRequestCommand, Result>
 {
     public async Task<Result> Handle(WithdrawRequestCommand request, CancellationToken cancellationToken)
@@ -71,15 +70,6 @@ public class WithdrawRequestHandler(
                 job.Status = JobStatus.Open;
                 job.UpdatedAt = DateTime.UtcNow;
             }
-
-            // Notify customer
-            await notifications.SendInAppNotificationAsync(
-                job.CustomerProfile.UserId,
-                "vendor_withdrew",
-                "Vendor withdrew from your job",
-                $"A vendor has withdrawn their request for \"{job.Title}\".",
-                new { jobId = job.Id },
-                cancellationToken);
         }
 
         await db.SaveChangesAsync(cancellationToken);

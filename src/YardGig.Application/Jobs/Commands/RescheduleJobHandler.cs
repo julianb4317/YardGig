@@ -8,8 +8,7 @@ namespace YardGig.Application.Jobs.Commands;
 
 public class RescheduleJobHandler(
     IAppDbContext db,
-    ICurrentUserService currentUser,
-    INotificationService notifications
+    ICurrentUserService currentUser
 ) : IRequestHandler<RescheduleJobCommand, Result>
 {
     private static readonly JobStatus[] ReschedulableStatuses =
@@ -48,18 +47,6 @@ public class RescheduleJobHandler(
         job.ScheduleStart = request.ScheduleStart;
         job.ScheduleEnd = request.ScheduleEnd;
         job.UpdatedAt = DateTime.UtcNow;
-
-        // Notify assigned vendor if applicable
-        if (job.Status == JobStatus.Assigned && job.Assignment is not null)
-        {
-            await notifications.SendInAppNotificationAsync(
-                job.Assignment.VendorProfile.UserId,
-                "job_rescheduled",
-                "Job schedule changed",
-                $"The schedule for \"{job.Title}\" has been updated. You can withdraw if the new time doesn't work.",
-                new { jobId = job.Id, scheduleStart = request.ScheduleStart, scheduleEnd = request.ScheduleEnd },
-                cancellationToken);
-        }
 
         await db.SaveChangesAsync(cancellationToken);
         return Result.Success();

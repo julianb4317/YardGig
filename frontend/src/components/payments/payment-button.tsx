@@ -34,13 +34,17 @@ export function PaymentButton({ jobId, budgetCents, assignedVendorId, assignedVe
     onSuccess: (data) => {
       toast.success("Payment processed! Vendor will receive their payout.");
       setConfirmOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["job", jobId] });
-      queryClient.invalidateQueries({ queryKey: ["myJobs"] });
-      // Open rating modal — use vendorUserId from response or prop
+      // DON'T invalidate queries yet — the refetch would change job.status to "Paid" 
+      // which unmounts PaymentButton (and the rating modal with it)
+      // Invalidation happens after rating is submitted or skipped
       const vendorId = data.vendorUserId ?? assignedVendorId;
       if (vendorId) {
         setResolvedVendorId(vendorId);
         setRatingOpen(true);
+      } else {
+        // No vendor to rate — invalidate now
+        queryClient.invalidateQueries({ queryKey: ["job", jobId] });
+        queryClient.invalidateQueries({ queryKey: ["myJobs"] });
       }
     },
     onError: (err: ApiError) => {
@@ -63,10 +67,13 @@ export function PaymentButton({ jobId, budgetCents, assignedVendorId, assignedVe
       toast.success("Thanks for rating!");
       setRatingOpen(false);
       queryClient.invalidateQueries({ queryKey: ["job", jobId] });
+      queryClient.invalidateQueries({ queryKey: ["myJobs"] });
     },
     onError: () => {
       toast.error("Rating failed, but payment was successful.");
       setRatingOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["job", jobId] });
+      queryClient.invalidateQueries({ queryKey: ["myJobs"] });
     },
   });
 
@@ -131,7 +138,7 @@ export function PaymentButton({ jobId, budgetCents, assignedVendorId, assignedVe
             />
 
             <div className="mt-4 flex justify-end gap-3">
-              <button onClick={() => setRatingOpen(false)} className="rounded-md border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+              <button onClick={() => { setRatingOpen(false); queryClient.invalidateQueries({ queryKey: ["job", jobId] }); queryClient.invalidateQueries({ queryKey: ["myJobs"] }); }} className="rounded-md border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
                 Skip
               </button>
               <button

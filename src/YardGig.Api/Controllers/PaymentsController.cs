@@ -14,7 +14,8 @@ public class PaymentsController(
     IAppDbContext db,
     ICurrentUserService currentUser,
     IPaymentService paymentService,
-    ICommissionService commissionService
+    ICommissionService commissionService,
+    YardGig.Infrastructure.Services.JobNotifications jobNotifications
 ) : ControllerBase
 {
     // ─────────────── CUSTOMER: CARD MANAGEMENT ───────────────
@@ -279,6 +280,9 @@ public class PaymentsController(
             vendorProfile.UpdatedAt = DateTime.UtcNow;
 
             await db.SaveChangesAsync();
+
+            // Notify vendor of payment
+            _ = jobNotifications.NotifyPaymentReleased(job.Id, vendorProfile.UserId, vendorNetCents);
 
             return Ok(new { transactionId = transaction.Id, vendorEarnedCents = vendorNetCents, vendorUserId = vendorProfile.UserId });
         }

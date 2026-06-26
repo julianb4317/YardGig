@@ -5,13 +5,14 @@ using Microsoft.EntityFrameworkCore;
 using YardGig.Application.Common.Interfaces;
 using YardGig.Application.Jobs.Commands;
 using YardGig.Application.Jobs.Queries;
+using YardGig.Domain.Enums;
 
 namespace YardGig.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserService currentUser) : ControllerBase
+public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserService currentUser, YardGig.Infrastructure.Services.JobNotifications jobNotifications) : ControllerBase
 {
     /// <summary>
     /// Get open jobs within map viewport bounds.
@@ -161,6 +162,11 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
         if (!result.Succeeded)
             return BadRequest(result.Errors);
 
+        // Notify customer about the new request
+        var vendorProfile = await db.VendorProfiles.FirstOrDefaultAsync(v => v.UserId == currentUser.UserId);
+        if (vendorProfile != null)
+            _ = jobNotifications.NotifyJobRequested(id, vendorProfile.Id);
+
         return Ok(new { vendorRequestId = result.Data });
     }
 
@@ -175,7 +181,14 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
         {
             var command = new AssignVendorCommand(id, body.VendorRequestId);
             var result = await mediator.Send(command);
-            if (result.Succeeded) return Ok(new { message = "Vendor assigned." });
+            if (result.Succeeded)
+            {
+                // Notify the assigned vendor
+                var vendorReq = await db.VendorRequests.FirstOrDefaultAsync(vr => vr.Id == body.VendorRequestId);
+                if (vendorReq != null)
+                    _ = jobNotifications.NotifyJobAssigned(id, vendorReq.VendorProfileId);
+                return Ok(new { message = "Vendor assigned." });
+            }
             return BadRequest(new { errors = result.Errors });
         }
         catch (Exception ex)
@@ -209,7 +222,16 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
 
             var command = new UpdateJobStatusCommand(id, status);
             var result = await mediator.Send(command);
-            return result.Succeeded ? Ok(new { status = status.ToString() }) : BadRequest(new { errors = result.Errors });
+            if (result.Succeeded)
+            {
+                // Send notifications based on status change
+                if (status == YardGig.Domain.Enums.JobStatus.InProgress)
+                    _ = jobNotifications.NotifyJobStarted(id);
+                else if (status == YardGig.Domain.Enums.JobStatus.Completed)
+                    _ = jobNotifications.NotifyJobCompleted(id);
+                return Ok(new { status = status.ToString() });
+            }
+            return BadRequest(new { errors = result.Errors });
         }
         catch (Exception ex)
         {
@@ -225,10 +247,28 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
     [Authorize(Policy = "CustomerOnly")]
     public async Task<IActionResult> CancelJob(Guid id, [FromBody] CancelJobBody? body)
     {
+        // Get vendor info before cancellation removes the assignment
+        var job = await db.JobRequests.Include(j => j.Assignment).ThenInclude(a => a!.VendorProfile).FirstOrDefaultAsync(j => j.Id == id);
+        var vendorUserIds = new List<Guid>();
+        if (job?.Assignment?.VendorProfile != null)
+            vendorUserIds.Add(job.Assignment.VendorProfile.UserId);
+
+        // Also get pending vendors
+        var pendingVendors = await db.VendorRequests
+            .Include(vr => vr.VendorProfile)
+            .Where(vr => vr.JobRequestId == id && vr.Status == Domain.Enums.VendorRequestStatus.Pending)
+            .Select(vr => vr.VendorProfile.UserId)
+            .ToListAsync();
+        vendorUserIds.AddRange(pendingVendors);
+
         var command = new CancelJobCommand(id, body?.Reason);
         var result = await mediator.Send(command);
         if (!result.Succeeded)
             return BadRequest(result.Errors);
+
+        // Notify all affected vendors
+        foreach (var vendorUserId in vendorUserIds.Distinct())
+            _ = jobNotifications.NotifyJobCancelled(id, vendorUserId, job?.Title ?? "Job");
 
         return Ok(new { message = "Job cancelled.", result.Data!.PenaltyApplied, result.Data.PenaltyCents });
     }
@@ -242,9 +282,15 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
     {
         var command = new RescheduleJobCommand(id, body.ScheduleStart, body.ScheduleEnd);
         var result = await mediator.Send(command);
-        return result.Succeeded
-            ? Ok(new { message = "Schedule updated." })
-            : BadRequest(result.Errors);
+        if (result.Succeeded)
+        {
+            // Notify assigned vendor
+            var job = await db.JobRequests.Include(j => j.Assignment).ThenInclude(a => a!.VendorProfile).FirstOrDefaultAsync(j => j.Id == id);
+            if (job?.Assignment?.VendorProfile != null)
+                _ = jobNotifications.NotifyJobRescheduled(id, job.Assignment.VendorProfile.UserId, job.Title);
+            return Ok(new { message = "Schedule updated." });
+        }
+        return BadRequest(result.Errors);
     }
 
     /// <summary>
@@ -267,9 +313,15 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
     {
         var command = new WithdrawRequestCommand(id);
         var result = await mediator.Send(command);
-        return result.Succeeded
-            ? Ok(new { message = "Request withdrawn." })
-            : BadRequest(result.Errors);
+        if (result.Succeeded)
+        {
+            // Notify customer
+            var job = await db.JobRequests.Include(j => j.CustomerProfile).FirstOrDefaultAsync(j => j.Id == id);
+            if (job?.CustomerProfile != null)
+                _ = jobNotifications.NotifyVendorWithdrew(id, job.CustomerProfile.UserId, job.Title);
+            return Ok(new { message = "Request withdrawn." });
+        }
+        return BadRequest(result.Errors);
     }
 
     /// <summary>

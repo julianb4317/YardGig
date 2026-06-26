@@ -33,6 +33,7 @@ public interface IAppDbContext
     DbSet<VendorBalance> VendorBalances { get; }
     DbSet<CustomerPaymentMethod> CustomerPaymentMethods { get; }
     DbSet<EscrowTransaction> EscrowTransactions { get; }
+    DbSet<JobMessage> JobMessages { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

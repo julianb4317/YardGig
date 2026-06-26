@@ -11,6 +11,7 @@ import { PageLoader } from "@/components/ui/spinner";
 import { JobActions } from "@/components/jobs/job-actions";
 import { PaymentButton } from "@/components/payments/payment-button";
 import { RequestJobDialog } from "@/components/jobs/request-job-dialog";
+import { JobChat } from "@/components/jobs/job-chat";
 import { fetchJobDetail } from "@/lib/api/jobs";
 import { formatCents, cn } from "@/lib/utils";
 import { CATEGORY_LABELS } from "@/lib/types";
@@ -35,7 +36,6 @@ export default function JobDetailPage() {
     queryKey: ["job", id],
     queryFn: () => fetchJobDetail(id),
     enabled: !!id,
-    refetchInterval: 10_000, // Auto-refresh to pick up status changes
   });
 
   if (isLoading) return <PageLoader />;
@@ -143,6 +143,13 @@ export default function JobDetailPage() {
           {/* Vendor: request this job */}
           {hasRole("Vendor") && (job.status === "Open" || job.status === "Requested") && (
             <VendorRequestSection jobId={job.id} jobTitle={job.title} />
+          )}
+
+          {/* Chat: available once a vendor is assigned */}
+          {["Assigned", "InProgress", "Completed", "Paid"].includes(job.status) && (
+            <div className="mt-4">
+              <JobChat jobId={job.id} />
+            </div>
           )}
         </div>
       </div>
