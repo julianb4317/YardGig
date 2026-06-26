@@ -83,7 +83,7 @@ export default function NotificationsPage() {
   const markReadMutation = useMutation({
     mutationFn: markNotificationRead,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      refetch();
       queryClient.invalidateQueries({ queryKey: ["unreadCount"] });
     },
   });
