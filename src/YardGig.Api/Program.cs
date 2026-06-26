@@ -147,12 +147,25 @@ if (app.Environment.IsDevelopment())
     try
     {
         var appDb = services.GetRequiredService<YardGig.Infrastructure.Persistence.AppDbContext>();
-        await appDb.Database.MigrateAsync();
+        
+        // If migration fails, drop everything and retry (dev only)
+        try
+        {
+            await appDb.Database.MigrateAsync();
+        }
+        catch
+        {
+            logger.LogWarning("Migration failed, dropping and recreating schema...");
+            await appDb.Database.ExecuteSqlRawAsync("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
+            await appDb.Database.ExecuteSqlRawAsync("CREATE EXTENSION IF NOT EXISTS postgis;");
+            await appDb.Database.MigrateAsync();
+        }
+        
         logger.LogInformation("AppDbContext migrations applied.");
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "AppDbContext migration failed.");
+        logger.LogError(ex, "AppDbContext migration failed completely.");
     }
 
     try
