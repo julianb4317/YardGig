@@ -20,23 +20,26 @@ export function PaymentButton({ jobId, budgetCents, assignedVendorId, assignedVe
   const queryClient = useQueryClient();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [ratingOpen, setRatingOpen] = useState(false);
+  const [resolvedVendorId, setResolvedVendorId] = useState<string | undefined>(assignedVendorId);
   const [ratingScore, setRatingScore] = useState(0);
   const [ratingComment, setRatingComment] = useState("");
   const [hoverStar, setHoverStar] = useState(0);
 
   const chargeMutation = useMutation({
     mutationFn: () =>
-      apiClient<{ transactionId: string } | { message: string; alreadyPaid: boolean }>("/api/payments/charge", {
+      apiClient<{ transactionId?: string; vendorUserId?: string; message?: string; alreadyPaid?: boolean }>("/api/payments/charge", {
         method: "POST",
         body: { jobRequestId: jobId },
       }),
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success("Payment processed! Vendor will receive their payout.");
       setConfirmOpen(false);
       queryClient.invalidateQueries({ queryKey: ["job", jobId] });
       queryClient.invalidateQueries({ queryKey: ["myJobs"] });
-      // Open rating modal
-      if (assignedVendorId) {
+      // Open rating modal — use vendorUserId from response or prop
+      const vendorId = data.vendorUserId ?? assignedVendorId;
+      if (vendorId) {
+        setResolvedVendorId(vendorId);
         setRatingOpen(true);
       }
     },
@@ -54,7 +57,7 @@ export function PaymentButton({ jobId, budgetCents, assignedVendorId, assignedVe
     mutationFn: () =>
       apiClient("/api/ratings", {
         method: "POST",
-        body: { jobRequestId: jobId, revieweeId: assignedVendorId, score: ratingScore, comment: ratingComment || undefined },
+        body: { jobRequestId: jobId, revieweeId: resolvedVendorId, score: ratingScore, comment: ratingComment || undefined },
       }),
     onSuccess: () => {
       toast.success("Thanks for rating!");

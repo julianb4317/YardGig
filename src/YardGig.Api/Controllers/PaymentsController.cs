@@ -274,9 +274,13 @@ public class PaymentsController(
             job.UpdatedAt = DateTime.UtcNow;
             if (job.Assignment is not null) job.Assignment.ConfirmedAt = DateTime.UtcNow;
 
+            // Increment vendor's completed jobs count
+            vendorProfile.TotalJobsCompleted += 1;
+            vendorProfile.UpdatedAt = DateTime.UtcNow;
+
             await db.SaveChangesAsync();
 
-            return Ok(new { transactionId = transaction.Id, vendorEarnedCents = vendorNetCents });
+            return Ok(new { transactionId = transaction.Id, vendorEarnedCents = vendorNetCents, vendorUserId = vendorProfile.UserId });
         }
         catch (Exception ex)
         {
