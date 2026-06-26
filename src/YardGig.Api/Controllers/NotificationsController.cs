@@ -54,7 +54,7 @@ public class NotificationsController(IAppDbContext db, ICurrentUserService curre
         notification.IsRead = true;
         await db.SaveChangesAsync();
 
-        return Ok();
+        return Ok(new { success = true });
     }
 
     /// <summary>

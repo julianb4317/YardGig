@@ -85,7 +85,10 @@ export async function apiClient<T = unknown>(
         body: body ? JSON.stringify(body) : undefined,
       });
       if (retryRes.ok) {
-        return retryRes.status === 204 ? (undefined as T) : retryRes.json();
+        if (retryRes.status === 204) return undefined as T;
+        const retryText = await retryRes.text();
+        if (!retryText) return undefined as T;
+        return JSON.parse(retryText) as T;
       }
     }
     // Refresh failed — redirect to login
@@ -110,5 +113,7 @@ export async function apiClient<T = unknown>(
   }
 
   if (res.status === 204) return undefined as T;
-  return res.json();
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }

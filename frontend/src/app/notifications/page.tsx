@@ -96,6 +96,8 @@ export default function NotificationsPage() {
       queryClient.setQueryData(["notifications", filter], context?.previous);
     },
     onSettled: () => {
+      // Refetch to sync with server (now that the write has persisted)
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
       queryClient.invalidateQueries({ queryKey: ["unreadCount"] });
     },
   });
