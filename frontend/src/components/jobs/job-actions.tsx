@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Play, CheckCircle, XCircle, Eye, Camera, Upload } from "lucide-react";
 import { updateJobStatus, cancelJob } from "@/lib/api/jobs";
+import { uploadFiles } from "@/lib/api/uploads";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { ApiError } from "@/lib/api-client";
@@ -14,14 +15,6 @@ import { hasRole } from "@/lib/auth";
 export function formatStatus(status: string): string {
   if (status === "InProgress") return "In Progress";
   return status;
-}
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.readAsDataURL(file);
-  });
 }
 
 interface JobActionsProps {
@@ -75,18 +68,18 @@ export function JobActions({ job }: JobActionsProps) {
     e.target.value = "";
   };
 
+  const [isUploading, setIsUploading] = useState(false);
+
   const submitComplete = async () => {
     if (photos.length === 0) {
       toast.error("Upload at least one completion photo.");
       return;
     }
-    // Convert photos to data URLs for storage
-    const photoUrls: string[] = [];
-    for (const file of photos) {
-      const url = await fileToDataUrl(file);
-      photoUrls.push(url);
-    }
+    setIsUploading(true);
     try {
+      // Upload files to server, get back URLs
+      const photoUrls = await uploadFiles(photos, "job_photo");
+      // Update job status with the uploaded photo URLs
       await updateJobStatus(job.id, "Completed", photoUrls);
       setLocalStatus("Completed");
       setCompleteOpen(false);
@@ -95,6 +88,8 @@ export function JobActions({ job }: JobActionsProps) {
       invalidate();
     } catch (err: any) {
       toast.error(err?.errors?.[0] ?? "Failed to mark complete.");
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -187,9 +182,9 @@ export function JobActions({ job }: JobActionsProps) {
 
             <div className="mt-6 flex justify-end gap-3">
               <button onClick={() => { setCompleteOpen(false); setPhotos([]); }} className="rounded-md border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
-              <button onClick={submitComplete} disabled={statusMutation.isPending || photos.length === 0} className="flex items-center gap-1.5 rounded-md bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50">
-                {statusMutation.isPending && <Spinner className="h-4 w-4 border-white border-t-transparent" />}
-                Submit & Complete
+              <button onClick={submitComplete} disabled={statusMutation.isPending || isUploading || photos.length === 0} className="flex items-center gap-1.5 rounded-md bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50">
+                {(statusMutation.isPending || isUploading) && <Spinner className="h-4 w-4 border-white border-t-transparent" />}
+                {isUploading ? "Uploading..." : "Submit & Complete"}
               </button>
             </div>
           </div>

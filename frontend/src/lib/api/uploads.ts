@@ -1,33 +1,35 @@
 /** File upload API integration */
 
-import { apiClient } from "@/lib/api-client";
+import Cookies from "js-cookie";
+import { ApiError } from "@/lib/api-client";
 
-export interface PresignResponse {
-  uploadUrl: string;
-  fileUrl: string;
-  key: string;
-  expiresIn: number;
-  maxSizeBytes: number;
-}
-
-export function getPresignedUrl(fileName: string, contentType: string, purpose: string) {
-  return apiClient<PresignResponse>("/api/uploads/presign", {
-    method: "POST",
-    body: { fileName, contentType, purpose },
-  });
-}
+const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5209";
 
 /**
- * Upload a file to the presigned URL, then return the permanent CDN fileUrl.
+ * Upload files via multipart form data.
+ * Returns an array of URLs for the uploaded files.
  */
-export async function uploadFile(file: File, purpose: string): Promise<string> {
-  const presign = await getPresignedUrl(file.name, file.type, purpose);
+export async function uploadFiles(files: File[], purpose = "job_photo"): Promise<string[]> {
+  const token = Cookies.get("yg_access");
 
-  await fetch(presign.uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": file.type },
-    body: file,
+  const formData = new FormData();
+  formData.append("purpose", purpose);
+  for (const file of files) {
+    formData.append("files", file);
+  }
+
+  const res = await fetch(`${BASE_URL}/api/uploads/files`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
   });
 
-  return presign.fileUrl;
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({}));
+    const errors: string[] = errorBody.errors ?? [errorBody.error ?? `Upload failed with ${res.status}`];
+    throw new ApiError(res.status, errors, res);
+  }
+
+  const data = await res.json();
+  return (data.urls as string[]).map((url) => `${BASE_URL}${url}`);
 }

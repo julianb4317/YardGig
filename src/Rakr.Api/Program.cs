@@ -191,6 +191,9 @@ if (app.Environment.IsDevelopment())
 // CORS must be before everything else so error responses also get CORS headers
 app.UseCors("AllowFrontend");
 
+// Serve uploaded files from wwwroot/uploads
+app.UseStaticFiles();
+
 app.UseHttpsRedirection();
 
 // Security headers

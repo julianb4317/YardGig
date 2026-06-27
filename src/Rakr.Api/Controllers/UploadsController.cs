@@ -7,7 +7,7 @@ namespace Rakr.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class UploadsController(IConfiguration configuration, ICurrentUserService currentUser) : ControllerBase
+public class UploadsController(IConfiguration configuration, ICurrentUserService currentUser, IWebHostEnvironment env) : ControllerBase
 {
     private static readonly HashSet<string> AllowedContentTypes =
     [
@@ -53,6 +53,56 @@ public class UploadsController(IConfiguration configuration, ICurrentUserService
             expiresIn = 300, // seconds
             maxSizeBytes = MaxFileSizeBytes
         });
+    }
+
+    /// <summary>
+    /// Direct file upload endpoint (dev/local mode).
+    /// Accepts multipart form data, saves to local storage, returns URLs.
+    /// In production, use presigned URLs + S3 instead.
+    /// </summary>
+    [HttpPost("files")]
+    [RequestSizeLimit(50 * 1024 * 1024)] // 50 MB total for batch
+    public async Task<IActionResult> UploadFiles([FromForm] List<IFormFile> files, [FromForm] string purpose = "job_photo")
+    {
+        if (currentUser.UserId is null) return Unauthorized();
+
+        if (!AllowedPurposes.Contains(purpose))
+            return BadRequest(new { errors = new[] { $"Invalid purpose. Use: {string.Join(", ", AllowedPurposes)}" } });
+
+        if (files.Count == 0)
+            return BadRequest(new { errors = new[] { "No files provided." } });
+
+        if (files.Count > 5)
+            return BadRequest(new { errors = new[] { "Maximum 5 files per upload." } });
+
+        var uploadedUrls = new List<string>();
+
+        foreach (var file in files)
+        {
+            if (file.Length == 0) continue;
+            if (file.Length > MaxFileSizeBytes)
+                return BadRequest(new { errors = new[] { $"File '{file.FileName}' exceeds 10 MB limit." } });
+
+            if (!AllowedContentTypes.Contains(file.ContentType))
+                return BadRequest(new { errors = new[] { $"File type '{file.ContentType}' not allowed." } });
+
+            var safeFileName = SanitizeFileName(file.FileName);
+            var uniqueName = $"{Guid.NewGuid():N}_{safeFileName}";
+            var relativePath = Path.Combine("uploads", purpose, currentUser.UserId.Value.ToString(), uniqueName);
+            var fullPath = Path.Combine(env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot"), relativePath);
+
+            // Ensure directory exists
+            Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+
+            await using var stream = new FileStream(fullPath, FileMode.Create);
+            await file.CopyToAsync(stream);
+
+            // Build URL relative to the API base
+            var fileUrl = $"/uploads/{purpose}/{currentUser.UserId.Value}/{uniqueName}";
+            uploadedUrls.Add(fileUrl);
+        }
+
+        return Ok(new { urls = uploadedUrls });
     }
 
     private static string SanitizeFileName(string fileName)
