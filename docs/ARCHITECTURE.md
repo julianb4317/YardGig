@@ -1,4 +1,4 @@
-# Architecture Design: YardGig Platform
+# Architecture Design: Rakr Platform
 
 ## 1. High-Level Architecture Diagram
 

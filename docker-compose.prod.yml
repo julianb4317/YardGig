@@ -4,13 +4,13 @@ services:
   api:
     build:
       context: .
-      dockerfile: src/YardGig.Api/Dockerfile
-    container_name: yardgig-api
+      dockerfile: src/Rakr.Api/Dockerfile
+    container_name: rakr-api
     ports:
       - "8080:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=yardgig;Username=postgres;Password=${DB_PASSWORD}
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=rakr;Username=postgres;Password=${DB_PASSWORD}
       - Jwt__Key=${JWT_KEY}
       - Stripe__SecretKey=${STRIPE_SECRET_KEY}
       - Stripe__WebhookSecret=${STRIPE_WEBHOOK_SECRET}
@@ -39,11 +39,11 @@ services:
 
   postgres:
     image: postgis/postgis:16-3.4
-    container_name: yardgig-postgres
+    container_name: rakr-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: yardgig
+      POSTGRES_DB: rakr
     ports:
       - "5432:5432"
     volumes:
@@ -61,7 +61,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: yardgig-redis
+    container_name: rakr-redis
     command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru --appendonly yes
     ports:
       - "6379:6379"
@@ -75,7 +75,7 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
-    container_name: yardgig-prometheus
+    container_name: rakr-prometheus
     ports:
       - "9090:9090"
     volumes:
@@ -84,7 +84,7 @@ services:
 
   grafana:
     image: grafana/grafana:latest
-    container_name: yardgig-grafana
+    container_name: rakr-grafana
     ports:
       - "3001:3000"
     environment:

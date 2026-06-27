@@ -391,7 +391,7 @@ Scenario: Under load performance
 | Partial index (status=Open) | `idx_jobrequest_status_created` | ✅ |
 | Bounding box query (uses && operator) | `GetJobsByBoundsHandler.cs` | ✅ |
 | Redis cache layer | `CommissionService` pattern (extend to map queries) | ✅ Architecture |
-| Prometheus metrics | `yardgig_map_query_duration_seconds` histogram | ✅ |
+| Prometheus metrics | `Rakr_map_query_duration_seconds` histogram | ✅ |
 | Health check on degradation | Production readiness spec | ✅ Documented |
 
 ### Verification
@@ -400,7 +400,7 @@ Scenario: Under load performance
 - [ ] Benchmark with 10k seeded jobs: p95 < 200ms
 - [ ] Benchmark with 50k seeded jobs: p99 < 500ms
 - [ ] Load test (k6): 500 concurrent users, p95 < 500ms, error rate < 0.1%
-- [ ] Prometheus histogram `yardgig_map_query_duration_seconds` correctly records all queries
+- [ ] Prometheus histogram `Rakr_map_query_duration_seconds` correctly records all queries
 - [ ] Response payload size verified: 200 pins < 50KB gzipped
 
 ### Performance Test Script (k6)

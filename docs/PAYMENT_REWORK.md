@@ -8,7 +8,7 @@
 
 ```
 ┌──────────┐       ┌─────────────────────┐       ┌──────────┐
-│ Customer │──$──▶ │  YardGig Platform   │──$──▶ │  Vendor  │
+│ Customer │──$──▶ │  Rakr Platform   │──$──▶ │  Vendor  │
 │ (card)   │       │  (Stripe Account)   │       │  (bank)  │
 └──────────┘       │                     │       └──────────┘
                    │  Holds funds until   │

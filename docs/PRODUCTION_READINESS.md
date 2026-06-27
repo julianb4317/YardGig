@@ -87,14 +87,14 @@
 
 ```csharp
 // Custom metrics (Prometheus via OpenTelemetry)
-Meter meter = new("YardGig.Api");
+Meter meter = new("Rakr.Api");
 
-Counter<long> jobsCreated = meter.CreateCounter<long>("yardgig_jobs_created_total");
-Counter<long> paymentsProcessed = meter.CreateCounter<long>("yardgig_payments_total", tags: ["status"]);
-Histogram<double> mapQueryDuration = meter.CreateHistogram<double>("yardgig_map_query_duration_seconds");
-Gauge<int> signalrConnections = meter.CreateGauge<int>("yardgig_signalr_connections");
-Counter<long> notificationsSent = meter.CreateCounter<long>("yardgig_notifications_sent_total", tags: ["channel", "status"]);
-Gauge<int> outboxDepth = meter.CreateGauge<int>("yardgig_notification_outbox_depth");
+Counter<long> jobsCreated = meter.CreateCounter<long>("Rakr_jobs_created_total");
+Counter<long> paymentsProcessed = meter.CreateCounter<long>("Rakr_payments_total", tags: ["status"]);
+Histogram<double> mapQueryDuration = meter.CreateHistogram<double>("Rakr_map_query_duration_seconds");
+Gauge<int> signalrConnections = meter.CreateGauge<int>("Rakr_signalr_connections");
+Counter<long> notificationsSent = meter.CreateCounter<long>("Rakr_notifications_sent_total", tags: ["channel", "status"]);
+Gauge<int> outboxDepth = meter.CreateGauge<int>("Rakr_notification_outbox_depth");
 ```
 
 ---
@@ -384,8 +384,8 @@ steps:
   - dotnet build --no-restore
   - dotnet test --no-build --collect:"XPlat Code Coverage"
   - dotnet publish -c Release -o ./publish
-  - docker build -t yardgig-api:${SHA} .
-  - docker push ECR/yardgig-api:${SHA}
+  - docker build -t Rakr-api:${SHA} .
+  - docker push ECR/Rakr-api:${SHA}
 ```
 
 ### 7.3 Quality Gates

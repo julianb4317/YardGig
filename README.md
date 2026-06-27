@@ -1,4 +1,4 @@
-# YardGig — Yard-Work Gig Marketplace
+# Rakr — Yard-Work Gig Marketplace
 
 A production-ready ASP.NET Core + PostgreSQL/PostGIS marketplace connecting homeowners with local yard-work vendors via map-based job discovery.
 
@@ -8,10 +8,10 @@ Modular monolith with clean architecture layers:
 
 ```
 src/
-├── YardGig.Domain          # Entities, enums, value objects, domain events
-├── YardGig.Application     # CQRS handlers (MediatR), interfaces, DTOs, validators
-├── YardGig.Infrastructure  # EF Core DbContext, PostGIS, Stripe, SignalR, services
-└── YardGig.Api             # Controllers, Program.cs, auth config, middleware
+├── Rakr.Domain          # Entities, enums, value objects, domain events
+├── Rakr.Application     # CQRS handlers (MediatR), interfaces, DTOs, validators
+├── Rakr.Infrastructure  # EF Core DbContext, PostGIS, Stripe, SignalR, services
+└── Rakr.Api             # Controllers, Program.cs, auth config, middleware
 ```
 
 **Bounded Contexts:** Identity & Access · Job Marketplace · Payments & Ledger · Notifications · Admin & Trust/Safety
@@ -30,10 +30,10 @@ src/
 docker-compose up -d
 
 # 2. Apply database migrations
-dotnet dotnet-ef database update --project src/YardGig.Infrastructure --startup-project src/YardGig.Api
+dotnet dotnet-ef database update --project src/Rakr.Infrastructure --startup-project src/Rakr.Api
 
 # 3. Run the API
-dotnet run --project src/YardGig.Api
+dotnet run --project src/Rakr.Api
 
 # 4. Open Swagger UI
 # https://localhost:5001/swagger
@@ -41,7 +41,7 @@ dotnet run --project src/YardGig.Api
 
 ## Configuration
 
-Edit `src/YardGig.Api/appsettings.Development.json`:
+Edit `src/Rakr.Api/appsettings.Development.json`:
 
 | Key | Description |
 |-----|-------------|

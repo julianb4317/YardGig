@@ -60,7 +60,7 @@ identity.Roles:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    YARDGIG ADMIN DASHBOARD                     │
+│                    Rakr ADMIN DASHBOARD                     │
 ├────────────────┬────────────────┬────────────────┬───────────┤
 │ Jobs Today     │ Active Vendors │ Open Disputes  │ Revenue   │
 │    47 (+12%)   │    234         │    8 ⚠️        │  $4,231   │
@@ -352,7 +352,7 @@ GET /api/admin/audit
   "entries": [
     {
       "id": 1234,
-      "actorEmail": "admin@yardgig.com",
+      "actorEmail": "admin@Rakr.com",
       "actorRole": "Admin",
       "action": "user.suspended",
       "entityType": "User",

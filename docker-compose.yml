@@ -3,11 +3,11 @@ version: "3.8"
 services:
   postgres:
     image: postgis/postgis:16-3.4
-    container_name: yardgig-postgres
+    container_name: rakr-postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: yardgig_dev
+      POSTGRES_DB: rakr_dev
     ports:
       - "5432:5432"
     volumes:
@@ -20,7 +20,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: yardgig-redis
+    container_name: rakr-redis
     ports:
       - "6379:6379"
 

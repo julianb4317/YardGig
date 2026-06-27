@@ -6,7 +6,7 @@ import { Footer } from "@/components/layout/footer";
 import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
-  title: "YardGig — Yard Work Marketplace",
+  title: "Rakr — Yard Work Marketplace",
   description: "Find and hire local yard work professionals, or discover nearby jobs.",
 };
 

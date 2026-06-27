@@ -134,8 +134,8 @@
 
 ```bash
 # Required
-NEXT_PUBLIC_API_BASE_URL=https://api.yardgig.com
-NEXT_PUBLIC_APP_NAME=YardGig
+NEXT_PUBLIC_API_BASE_URL=https://api.Rakr.com
+NEXT_PUBLIC_APP_NAME=Rakr
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
 
 # Optional (post-MVP)
@@ -156,10 +156,10 @@ npm run build        # Generates .next/standalone
 npm start            # Runs production server
 
 # Docker
-docker build -t yardgig-frontend .
+docker build -t Rakr-frontend .
 docker run -p 3000:3000 \
-  -e NEXT_PUBLIC_API_BASE_URL=https://api.yardgig.com \
-  yardgig-frontend
+  -e NEXT_PUBLIC_API_BASE_URL=https://api.Rakr.com \
+  Rakr-frontend
 
 # Run tests
 npm test             # Vitest (unit tests)

@@ -354,9 +354,9 @@ Full test coverage, performance validation, CI/CD pipeline, and production deplo
 
 | # | File / Feature | Status |
 |---|---------------|--------|
-| 1 | Unit test project: `YardGig.Tests.Unit` | ⬜ |
-| 2 | Integration test project: `YardGig.Tests.Integration` | ⬜ |
-| 3 | E2E test project: `YardGig.Tests.E2E` | ⬜ |
+| 1 | Unit test project: `Rakr.Tests.Unit` | ⬜ |
+| 2 | Integration test project: `Rakr.Tests.Integration` | ⬜ |
+| 3 | E2E test project: `Rakr.Tests.E2E` | ⬜ |
 | 4 | Testcontainers setup (PostgreSQL + PostGIS) | ⬜ |
 | 5 | Performance tests: map query with 10k jobs | ⬜ |
 | 6 | Load test: 500 concurrent users (k6 or NBomber) | ⬜ |
@@ -395,7 +395,7 @@ Full test coverage, performance validation, CI/CD pipeline, and production deplo
   ╱──────────────────╲
 ```
 
-### 3.2 Unit Tests (src/YardGig.Tests.Unit)
+### 3.2 Unit Tests (src/Rakr.Tests.Unit)
 
 | Module | Test Count | Focus |
 |--------|-----------|-------|
@@ -409,7 +409,7 @@ Full test coverage, performance validation, CI/CD pipeline, and production deplo
 
 **Mocking strategy:** MediatR handlers tested with mocked `IAppDbContext` (in-memory or Moq).
 
-### 3.3 Integration Tests (src/YardGig.Tests.Integration)
+### 3.3 Integration Tests (src/Rakr.Tests.Integration)
 
 | Scenario | Count | Setup |
 |----------|-------|-------|
@@ -423,7 +423,7 @@ Full test coverage, performance validation, CI/CD pipeline, and production deplo
 
 **Framework:** `WebApplicationFactory<Program>` + Testcontainers for PostgreSQL with PostGIS.
 
-### 3.4 E2E Tests (src/YardGig.Tests.E2E)
+### 3.4 E2E Tests (src/Rakr.Tests.E2E)
 
 | Scenario | Steps |
 |----------|-------|
@@ -465,10 +465,10 @@ jobs:
       - run: dotnet build --no-restore -warnaserror
 
       # Gate 2: Unit Tests
-      - run: dotnet test tests/YardGig.Tests.Unit --no-build --collect:"XPlat Code Coverage"
+      - run: dotnet test tests/Rakr.Tests.Unit --no-build --collect:"XPlat Code Coverage"
 
       # Gate 3: Integration Tests
-      - run: dotnet test tests/YardGig.Tests.Integration --no-build
+      - run: dotnet test tests/Rakr.Tests.Integration --no-build
         env:
           ConnectionStrings__DefaultConnection: "Host=localhost;..."
 
@@ -482,10 +482,10 @@ jobs:
           args: --severity-threshold=high
 
       # Gate 6: Container Build + Scan
-      - run: docker build -t yardgig-api:${{ github.sha }} .
+      - run: docker build -t Rakr-api:${{ github.sha }} .
       - uses: aquasecurity/trivy-action@master
         with:
-          image-ref: yardgig-api:${{ github.sha }}
+          image-ref: Rakr-api:${{ github.sha }}
           severity: CRITICAL,HIGH
           exit-code: 1
 
@@ -493,9 +493,9 @@ jobs:
       - run: ./scripts/deploy-staging.sh
 
       # Gate 8: Smoke Tests against Staging
-      - run: dotnet test tests/YardGig.Tests.E2E
+      - run: dotnet test tests/Rakr.Tests.E2E
         env:
-          API_BASE_URL: https://staging.yardgig.com
+          API_BASE_URL: https://staging.Rakr.com
 ```
 
 ### 4.2 Gate Summary
@@ -573,13 +573,13 @@ jobs:
 ### Backend (Complete)
 
 ```
-src/YardGig.Domain/
+src/Rakr.Domain/
 ├── Common/          (3 files) ✅
 ├── Entities/        (20 files) ✅
 ├── Enums/           (7 files) ✅
 └── Events/          (5 files) ✅
 
-src/YardGig.Application/
+src/Rakr.Application/
 ├── Auth/            (2 files) ✅
 ├── Common/          (7 files) ✅
 ├── Jobs/            (16 files) ✅
@@ -587,14 +587,14 @@ src/YardGig.Application/
 ├── Payments/        (2 files) ✅
 └── Ratings/         (2 files) ✅
 
-src/YardGig.Infrastructure/
+src/Rakr.Infrastructure/
 ├── Identity/        (5 files) ✅
 ├── Hubs/            (1 file) ✅
 ├── Notifications/   (5 files) ✅
 ├── Persistence/     (13 files) ✅
 └── Services/        (6 files) ✅
 
-src/YardGig.Api/
+src/Rakr.Api/
 ├── Controllers/     (10 files) ✅
 ├── Program.cs       ✅
 └── Dockerfile       ✅
@@ -641,17 +641,17 @@ frontend/                          (⬜ All pending)
 
 ```
 tests/                             (⬜ All pending)
-├── YardGig.Tests.Unit/
+├── Rakr.Tests.Unit/
 │   ├── Jobs/
 │   ├── Payments/
 │   ├── Auth/
 │   └── Notifications/
-├── YardGig.Tests.Integration/
+├── Rakr.Tests.Integration/
 │   ├── Fixtures/
 │   ├── Jobs/
 │   ├── Auth/
 │   └── Payments/
-└── YardGig.Tests.E2E/
+└── Rakr.Tests.E2E/
     ├── HappyPathTests.cs
     └── FailureScenarioTests.cs
 ```

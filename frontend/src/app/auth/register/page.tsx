@@ -50,7 +50,7 @@ export default function RegisterPage() {
       if (data.accessToken) {
         // Registration returned tokens — go directly to dashboard
         setAuth(data);
-        toast.success("Account created! Welcome to YardGig.");
+        toast.success("Account created! Welcome to Rakr.");
         const roles: string[] = data.roles ?? [];
         if (roles.includes("Vendor")) router.push("/dashboard/vendor");
         else if (roles.includes("Customer")) router.push("/dashboard/customer");

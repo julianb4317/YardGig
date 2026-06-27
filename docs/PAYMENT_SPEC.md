@@ -4,11 +4,11 @@
 
 ### 1.1 Platform Architecture
 
-YardGig uses **Stripe Connect** with the **Destination Charges** model:
+Rakr uses **Stripe Connect** with the **Destination Charges** model:
 
 ```
 ┌─────────────┐         ┌──────────────────┐         ┌─────────────┐
-│  Customer   │────$────▶│  YardGig Platform │────$────▶│   Vendor    │
+│  Customer   │────$────▶│  Rakr Platform │────$────▶│   Vendor    │
 │ (card)      │         │  (Stripe Account) │         │ (Connected) │
 └─────────────┘         └──────────────────┘         └─────────────┘
                               │                              ▲
@@ -18,7 +18,7 @@ YardGig uses **Stripe Connect** with the **Destination Charges** model:
 ```
 
 **Why Destination Charges:**
-- Customer sees "YardGig" on their statement (brand trust).
+- Customer sees "Rakr" on their statement (brand trust).
 - Platform collects full payment, then splits to vendor.
 - Platform controls refund logic.
 - Simplifies PCI compliance (Stripe.js handles card data).
@@ -27,7 +27,7 @@ YardGig uses **Stripe Connect** with the **Destination Charges** model:
 
 | Stage | Action | API Call |
 |-------|--------|---------|
-| 1. Registration | Vendor signs up on YardGig | — |
+| 1. Registration | Vendor signs up on Rakr | — |
 | 2. Onboarding | Redirect to Stripe Connect onboarding | `POST /v1/accounts` (type: express) |
 | 3. Verification | Vendor completes Stripe identity checks | Stripe hosted onboarding flow |
 | 4. Active | `charges_enabled = true` | Webhook: `account.updated` |
@@ -63,7 +63,7 @@ GET /api/vendors/stripe/status
 sequenceDiagram
     participant C as Customer (Browser)
     participant FE as Frontend
-    participant API as YardGig API
+    participant API as Rakr API
     participant S as Stripe
     participant V as Vendor (Connected)
 
@@ -146,7 +146,7 @@ var stripeEvent = EventUtility.ConstructEvent(
 ```
 Gross Amount (customer pays)
 ├── Stripe Processing Fee (2.9% + $0.30) — deducted by Stripe
-├── Platform Commission (configurable %) — YardGig revenue
+├── Platform Commission (configurable %) — Rakr revenue
 └── Vendor Net Payout — what the vendor receives
 ```
 
@@ -520,7 +520,7 @@ ORDER BY month DESC;
 | Idempotent charges | Idempotency keys on all create operations |
 | Refund fraud | Only admin can issue refunds; audit logged |
 | Vendor payout fraud | Connected accounts verified via Stripe KYC |
-| Statement descriptor | "YARDGIG*{JOB_TITLE}" (max 22 chars) |
+| Statement descriptor | "Rakr*{JOB_TITLE}" (max 22 chars) |
 | Currency | USD only at MVP; multi-currency post-MVP |
 | Minimum charge | $1.00 (Stripe minimum for US) |
 | Maximum charge | $10,000 (platform limit) |

@@ -100,7 +100,7 @@
 ```
 User submits request via:
   - In-app settings → "Download my data" / "Delete my account"
-  - Email to privacy@yardgig.com
+  - Email to privacy@Rakr.com
 
 ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
 │  Request │───▶│ Verify   │───▶│ Process  │───▶│ Confirm  │
@@ -279,7 +279,7 @@ Stripe Connect handles most 1099-K obligations when configured:
 
 ### 5.4 Sales Tax Considerations
 
-- YardGig is a **marketplace facilitator** in most states.
+- Rakr is a **marketplace facilitator** in most states.
 - Yard work services may be subject to sales tax in some states (varies by state).
 - **MVP approach:** Do not collect sales tax; clearly state prices exclude tax.
 - **Post-MVP:** Integrate Stripe Tax or TaxJar for automated sales tax calculation.

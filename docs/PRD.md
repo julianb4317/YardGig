@@ -1,10 +1,10 @@
-# Product Requirements Document: YardGig – Yard-Work Gig Marketplace
+# Product Requirements Document: Rakr – Yard-Work Gig Marketplace
 
 ## 1. Problem Statement
 
 Homeowners and property managers need reliable, on-demand yard-work services (mowing, leaf removal, hedge trimming, snow clearing, etc.) but struggle to find vetted local providers quickly. Existing platforms (Craigslist, Nextdoor, Thumbtack) lack real-time geographic discovery, transparent pricing, and integrated payments tailored to outdoor maintenance work.
 
-**YardGig** connects customers who post yard-work jobs with local vendors who discover and claim jobs via an interactive map interface — reducing friction for both sides and providing trust, scheduling, and payment infrastructure.
+**Rakr** connects customers who post yard-work jobs with local vendors who discover and claim jobs via an interactive map interface — reducing friction for both sides and providing trust, scheduling, and payment infrastructure.
 
 ---
 
