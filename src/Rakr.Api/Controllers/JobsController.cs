@@ -172,6 +172,7 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
 
     /// <summary>
     /// Customer assigns a vendor to the job.
+    /// If vendor proposed a higher price, charges the difference to escrow.
     /// </summary>
     [HttpPut("{id:guid}/assign")]
     [Authorize(Policy = "CustomerOnly")]
@@ -179,30 +180,112 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
     {
         try
         {
+            // Check if there's a price difference that needs to be charged
+            var vendorReq = await db.VendorRequests.FirstOrDefaultAsync(vr => vr.Id == body.VendorRequestId);
+            if (vendorReq is null)
+                return NotFound(new { errors = new[] { "Vendor request not found." } });
+
+            var job = await db.JobRequests
+                .Include(j => j.CustomerProfile)
+                .FirstOrDefaultAsync(j => j.Id == id);
+            if (job is null)
+                return NotFound(new { errors = new[] { "Job not found." } });
+
+            // Determine effective price: vendor's proposed price if higher, else budget
+            var effectivePriceCents = job.BudgetCents;
+            if (vendorReq.ProposedPriceCents.HasValue && vendorReq.ProposedPriceCents.Value > job.BudgetCents)
+            {
+                effectivePriceCents = vendorReq.ProposedPriceCents.Value;
+
+                // If caller hasn't confirmed the higher price, return the price info so frontend can show confirmation
+                if (!body.ConfirmedPriceCents.HasValue || body.ConfirmedPriceCents.Value != effectivePriceCents)
+                {
+                    return Ok(new
+                    {
+                        requiresPriceConfirmation = true,
+                        originalBudgetCents = job.BudgetCents,
+                        vendorPriceCents = effectivePriceCents,
+                        differenceCents = effectivePriceCents - job.BudgetCents
+                    });
+                }
+
+                // Charge the difference
+                var paymentService = HttpContext.RequestServices.GetRequiredService<IPaymentService>();
+                var commissionService = HttpContext.RequestServices.GetRequiredService<ICommissionService>();
+
+                var card = await db.CustomerPaymentMethods
+                    .FirstOrDefaultAsync(pm => pm.CustomerProfileId == job.CustomerProfile!.Id && pm.IsDefault);
+
+                if (card is null)
+                    return BadRequest(new { errors = new[] { "No payment method on file. Please add a card in Settings." } });
+
+                var differenceCents = effectivePriceCents - job.BudgetCents;
+
+                var chargeResult = await paymentService.ChargeCustomerAsync(
+                    card.StripeCustomerId, card.StripePaymentMethodId,
+                    differenceCents, "usd", $"escrow_topup_{job.Id}",
+                    $"Rakr escrow top-up: {job.Title[..Math.Min(job.Title.Length, 25)]}");
+
+                if (!chargeResult.Succeeded)
+                    return BadRequest(new { errors = new[] { "Failed to charge the price difference. Please check your payment method." } });
+
+                // Update the existing escrow or create a new top-up entry
+                var existingEscrow = await db.EscrowTransactions
+                    .FirstOrDefaultAsync(e => e.JobRequestId == job.Id && e.Status == Rakr.Domain.Entities.EscrowStatus.Held);
+
+                if (existingEscrow is not null)
+                {
+                    // Update the escrow totals
+                    var fees = await commissionService.CalculateFeesAsync(
+                        effectivePriceCents, Guid.Empty, job.Categories.ToArray());
+                    existingEscrow.AmountCents = fees.GrossAmountCents;
+                    existingEscrow.PlatformFeeCents = fees.PlatformFeeCents;
+                    existingEscrow.VendorAmountCents = fees.VendorNetCents;
+                }
+                else
+                {
+                    // Create new escrow entry for the full amount
+                    var fees = await commissionService.CalculateFeesAsync(
+                        effectivePriceCents, Guid.Empty, job.Categories.ToArray());
+                    db.EscrowTransactions.Add(new Domain.Entities.EscrowTransaction
+                    {
+                        JobRequestId = job.Id,
+                        CustomerProfileId = job.CustomerProfile!.Id,
+                        StripePaymentIntentId = chargeResult.PaymentIntentId,
+                        AmountCents = fees.GrossAmountCents,
+                        PlatformFeeCents = fees.PlatformFeeCents,
+                        VendorAmountCents = fees.VendorNetCents,
+                        Status = Rakr.Domain.Entities.EscrowStatus.Held
+                    });
+                }
+
+                // Update the job's budget to the new effective price
+                job.BudgetCents = effectivePriceCents;
+                job.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+            }
+
+            // Now proceed with the actual assignment
             var command = new AssignVendorCommand(id, body.VendorRequestId);
             var result = await mediator.Send(command);
             if (result.Succeeded)
             {
                 // Notify the assigned vendor
-                var vendorReq = await db.VendorRequests.FirstOrDefaultAsync(vr => vr.Id == body.VendorRequestId);
-                if (vendorReq != null)
-                {
-                    try { await jobNotifications.NotifyJobAssigned(id, vendorReq.VendorProfileId); } catch { /* notification non-fatal */ }
+                try { await jobNotifications.NotifyJobAssigned(id, vendorReq.VendorProfileId); } catch { /* notification non-fatal */ }
 
-                    // If this is a recurring job template, assign vendor to the series too
-                    var job = await db.JobRequests.FirstOrDefaultAsync(j => j.Id == id);
-                    if (job is { IsRecurring: true })
+                // If this is a recurring job template, assign vendor to the series too
+                if (job.IsRecurring)
+                {
+                    var series = await db.RecurringJobSeries
+                        .FirstOrDefaultAsync(s => s.TemplateJobId == id);
+                    if (series != null)
                     {
-                        var series = await db.RecurringJobSeries
-                            .FirstOrDefaultAsync(s => s.TemplateJobId == id);
-                        if (series != null)
-                        {
-                            series.AssignedVendorProfileId = vendorReq.VendorProfileId;
-                            await db.SaveChangesAsync();
-                        }
+                        series.AssignedVendorProfileId = vendorReq.VendorProfileId;
+                        await db.SaveChangesAsync();
                     }
                 }
-                return Ok(new { message = "Vendor assigned." });
+
+                return Ok(new { message = "Vendor assigned.", priceCents = effectivePriceCents });
             }
             return BadRequest(new { errors = result.Errors });
         }
@@ -433,7 +516,7 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
 }
 
 public record RequestJobBody(int? ProposedPriceCents, string? Note);
-public record AssignVendorBody(Guid VendorRequestId);
+public record AssignVendorBody(Guid VendorRequestId, int? ConfirmedPriceCents = null);
 public record UpdateStatusBody(string Status, string[]? CompletionPhotos = null);
 public record CancelJobBody(string? Reason);
 public record RescheduleJobBody(DateTime ScheduleStart, DateTime ScheduleEnd);

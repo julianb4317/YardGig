@@ -91,10 +91,19 @@ export function fetchJobRequests(jobId: string) {
 
 // ─── Customer: Assign Vendor ───
 
-export function assignVendor(jobId: string, vendorRequestId: string) {
-  return apiClient(`/api/jobs/${jobId}/assign`, {
+export interface AssignVendorResponse {
+  message?: string;
+  priceCents?: number;
+  requiresPriceConfirmation?: boolean;
+  originalBudgetCents?: number;
+  vendorPriceCents?: number;
+  differenceCents?: number;
+}
+
+export function assignVendor(jobId: string, vendorRequestId: string, confirmedPriceCents?: number) {
+  return apiClient<AssignVendorResponse>(`/api/jobs/${jobId}/assign`, {
     method: "PUT",
-    body: { vendorRequestId },
+    body: { vendorRequestId, confirmedPriceCents },
   });
 }
 
