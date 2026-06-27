@@ -33,6 +33,8 @@ export function JobChat({ jobId }: JobChatProps) {
     queryFn: () => apiClient<ChatMessage[]>(`/api/jobs/${jobId}/messages`),
     enabled: isOpen,
     refetchInterval: isOpen ? 5000 : false,
+    staleTime: 0, // Always refetch on mount to ensure isMe is correct for current user
+    gcTime: 0, // Don't cache across sessions — prevents stale bubble positioning
   });
 
   // Poll for unread count even when chat is closed
@@ -41,6 +43,8 @@ export function JobChat({ jobId }: JobChatProps) {
     queryFn: () => apiClient<ChatMessage[]>(`/api/jobs/${jobId}/messages?limit=50`),
     enabled: !isOpen,
     refetchInterval: 15000,
+    staleTime: 0,
+    gcTime: 0,
   });
 
   const sendMutation = useMutation({

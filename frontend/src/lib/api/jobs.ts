@@ -115,3 +115,17 @@ export function cancelJob(jobId: string, reason?: string) {
     body: { reason },
   });
 }
+
+// ─── Schedule Conflict Check ───
+
+export interface ScheduleConflict {
+  id: string;
+  title: string;
+  scheduleStart: string | null;
+  scheduleEnd: string | null;
+  status: string;
+}
+
+export function checkScheduleConflicts(jobId: string) {
+  return apiClient<{ conflicts: ScheduleConflict[] }>(`/api/jobs/${jobId}/check-conflicts`);
+}

@@ -350,6 +350,86 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
         var result = await mediator.Send(new GetVendorMyRequestsQuery(currentUser.UserId.Value));
         return Ok(result);
     }
+
+    /// <summary>
+    /// Check if a job conflicts with the vendor's existing assigned/in-progress jobs.
+    /// Returns any jobs that overlap in schedule.
+    /// </summary>
+    [HttpGet("{id:guid}/check-conflicts")]
+    [Authorize(Policy = "VendorOnly")]
+    public async Task<IActionResult> CheckScheduleConflicts(Guid id)
+    {
+        if (currentUser.UserId is null) return Unauthorized();
+
+        var targetJob = await db.JobRequests.AsNoTracking().FirstOrDefaultAsync(j => j.Id == id);
+        if (targetJob is null) return NotFound();
+
+        // If the target job has no schedule, there can be no time-based conflicts
+        if (!targetJob.ScheduleStart.HasValue && !targetJob.ScheduleEnd.HasValue)
+            return Ok(new { conflicts = Array.Empty<object>() });
+
+        var vendorProfile = await db.VendorProfiles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(vp => vp.UserId == currentUser.UserId.Value);
+
+        if (vendorProfile is null)
+            return Ok(new { conflicts = Array.Empty<object>() });
+
+        // Get all jobs this vendor is assigned to or has pending requests for (active)
+        var assignedJobIds = await db.JobAssignments
+            .AsNoTracking()
+            .Where(a => a.VendorProfileId == vendorProfile.Id)
+            .Select(a => a.JobRequestId)
+            .ToListAsync();
+
+        var pendingRequestJobIds = await db.VendorRequests
+            .AsNoTracking()
+            .Where(vr => vr.VendorProfileId == vendorProfile.Id
+                && (vr.Status == Domain.Enums.VendorRequestStatus.Pending || vr.Status == Domain.Enums.VendorRequestStatus.Accepted))
+            .Select(vr => vr.JobRequestId)
+            .ToListAsync();
+
+        var existingJobIds = assignedJobIds.Concat(pendingRequestJobIds).Distinct().ToList();
+
+        if (existingJobIds.Count == 0)
+            return Ok(new { conflicts = Array.Empty<object>() });
+
+        // Get those jobs with schedules
+        var existingJobs = await db.JobRequests
+            .AsNoTracking()
+            .Where(j => existingJobIds.Contains(j.Id)
+                && j.Status != Domain.Enums.JobStatus.Completed
+                && j.Status != Domain.Enums.JobStatus.Paid
+                && j.Status != Domain.Enums.JobStatus.Closed
+                && j.Status != Domain.Enums.JobStatus.Cancelled
+                && j.Status != Domain.Enums.JobStatus.Expired)
+            .ToListAsync();
+
+        // Check for overlapping schedules
+        var targetStart = targetJob.ScheduleStart ?? DateTime.MinValue;
+        var targetEnd = targetJob.ScheduleEnd ?? DateTime.MaxValue;
+
+        var conflicts = existingJobs
+            .Where(j =>
+            {
+                if (!j.ScheduleStart.HasValue && !j.ScheduleEnd.HasValue) return false;
+                var existingStart = j.ScheduleStart ?? DateTime.MinValue;
+                var existingEnd = j.ScheduleEnd ?? DateTime.MaxValue;
+                // Overlap check: starts before other ends AND ends after other starts
+                return targetStart < existingEnd && targetEnd > existingStart;
+            })
+            .Select(j => new
+            {
+                j.Id,
+                j.Title,
+                j.ScheduleStart,
+                j.ScheduleEnd,
+                Status = j.Status.ToString()
+            })
+            .ToList();
+
+        return Ok(new { conflicts });
+    }
 }
 
 public record RequestJobBody(int? ProposedPriceCents, string? Note);
