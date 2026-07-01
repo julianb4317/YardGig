@@ -159,7 +159,8 @@ if (app.Environment.IsDevelopment())
         catch
         {
             logger.LogWarning("Migration failed, dropping and recreating schema...");
-            await appDb.Database.ExecuteSqlRawAsync("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
+            await appDb.Database.ExecuteSqlRawAsync("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;");
+            await appDb.Database.ExecuteSqlRawAsync("DROP SCHEMA IF EXISTS identity CASCADE;");
             await appDb.Database.ExecuteSqlRawAsync("CREATE EXTENSION IF NOT EXISTS postgis;");
             await appDb.Database.MigrateAsync();
         }
