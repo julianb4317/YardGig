@@ -415,18 +415,22 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
             var result = await mediator.Send(command);
             if (result.Succeeded)
             {
-                // CAPTURE the authorization hold — now the card is officially charged
-                var capturePaymentSvc = HttpContext.RequestServices.GetRequiredService<IPaymentService>();
-                var escrowToCapture = await db.EscrowTransactions
-                    .FirstOrDefaultAsync(e => e.JobRequestId == id && e.Status == Rakr.Domain.Entities.EscrowStatus.Authorized);
-                if (escrowToCapture != null && !string.IsNullOrEmpty(escrowToCapture.StripePaymentIntentId))
+                // CAPTURE the authorization hold for FIXED-PRICE jobs only
+                // Hourly jobs keep the auth hold until customer verifies actual hours (partial capture)
+                if (job.PricingType != "hourly")
                 {
-                    var captureResult = await capturePaymentSvc.CapturePaymentAsync(escrowToCapture.StripePaymentIntentId);
-                    if (captureResult.Succeeded)
+                    var capturePaymentSvc = HttpContext.RequestServices.GetRequiredService<IPaymentService>();
+                    var escrowToCapture = await db.EscrowTransactions
+                        .FirstOrDefaultAsync(e => e.JobRequestId == id && e.Status == Rakr.Domain.Entities.EscrowStatus.Authorized);
+                    if (escrowToCapture != null && !string.IsNullOrEmpty(escrowToCapture.StripePaymentIntentId))
                     {
-                        escrowToCapture.Status = Rakr.Domain.Entities.EscrowStatus.Held;
-                        escrowToCapture.CapturedAt = DateTime.UtcNow;
-                        await db.SaveChangesAsync();
+                        var captureResult = await capturePaymentSvc.CapturePaymentAsync(escrowToCapture.StripePaymentIntentId);
+                        if (captureResult.Succeeded)
+                        {
+                            escrowToCapture.Status = Rakr.Domain.Entities.EscrowStatus.Held;
+                            escrowToCapture.CapturedAt = DateTime.UtcNow;
+                            await db.SaveChangesAsync();
+                        }
                     }
                 }
 

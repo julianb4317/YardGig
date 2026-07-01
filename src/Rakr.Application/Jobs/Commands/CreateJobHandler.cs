@@ -119,38 +119,37 @@ public class CreateJobHandler(
         }
 
         // ESCROW: Place authorization hold on customer's card (one-off jobs only)
-        // Funds are NOT captured yet — that happens when vendor is assigned
+        // Funds are NOT captured yet — that happens when vendor is assigned (fixed) or verification (hourly)
         var card = await db.CustomerPaymentMethods
             .FirstOrDefaultAsync(pm => pm.CustomerProfileId == customerProfile.Id && pm.IsDefault, cancellationToken);
 
-        if (card is not null)
+        if (card is null)
+            return Result<Guid>.Failure("A payment method is required to post a job. Please add a card in Settings first.");
+
+        var fees = await commissionService.CalculateFeesAsync(
+            effectiveBudgetCents, Guid.Empty, request.Categories, cancellationToken);
+
+        var authResult = await paymentService.AuthorizePaymentAsync(
+            card.StripeCustomerId, card.StripePaymentMethodId,
+            fees.TotalChargeCents, "usd", $"auth_{job.Id}",
+            $"Rakr hold: {request.Title[..Math.Min(request.Title.Length, 30)]}", cancellationToken);
+
+        if (authResult.Succeeded)
         {
-            var fees = await commissionService.CalculateFeesAsync(
-                request.BudgetCents, Guid.Empty, request.Categories, cancellationToken);
-
-            var authResult = await paymentService.AuthorizePaymentAsync(
-                card.StripeCustomerId, card.StripePaymentMethodId,
-                fees.TotalChargeCents, "usd", $"auth_{job.Id}",
-                $"Rakr hold: {request.Title[..Math.Min(request.Title.Length, 30)]}", cancellationToken);
-
-            if (authResult.Succeeded)
+            db.EscrowTransactions.Add(new EscrowTransaction
             {
-                db.EscrowTransactions.Add(new EscrowTransaction
-                {
-                    JobRequestId = job.Id,
-                    CustomerProfileId = customerProfile.Id,
-                    StripePaymentIntentId = authResult.PaymentIntentId,
-                    AmountCents = fees.TotalChargeCents,
-                    BudgetCents = fees.BudgetCents,
-                    TrustFeeCents = fees.TrustFeeCents,
-                    ProcessingFeeCents = fees.ProcessingFeeCents,
-                    PlatformFeeCents = fees.TrustFeeCents,
-                    VendorAmountCents = fees.BudgetCents,
-                    Status = EscrowStatus.Authorized
-                });
-                await db.SaveChangesAsync(cancellationToken);
-            }
-            // If auth fails, job is still created (customer can add/fix card later)
+                JobRequestId = job.Id,
+                CustomerProfileId = customerProfile.Id,
+                StripePaymentIntentId = authResult.PaymentIntentId,
+                AmountCents = fees.TotalChargeCents,
+                BudgetCents = fees.BudgetCents,
+                TrustFeeCents = fees.TrustFeeCents,
+                ProcessingFeeCents = fees.ProcessingFeeCents,
+                PlatformFeeCents = fees.TrustFeeCents,
+                VendorAmountCents = fees.BudgetCents,
+                Status = EscrowStatus.Authorized
+            });
+            await db.SaveChangesAsync(cancellationToken);
         }
 
         return Result<Guid>.Success(job.Id);
