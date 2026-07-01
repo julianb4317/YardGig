@@ -3,7 +3,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Play, CheckCircle, XCircle, Eye, Camera, Upload } from "lucide-react";
+import { Play, CheckCircle, XCircle, Eye, Camera, Upload, AlertTriangle } from "lucide-react";
+import Link from "next/link";
 import { updateJobStatus, cancelJob } from "@/lib/api/jobs";
 import { uploadFiles } from "@/lib/api/uploads";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -145,6 +146,24 @@ export function JobActions({ job }: JobActionsProps) {
 
         {effectiveStatus === "Paid" && (
           <div className="rounded-md bg-emerald-50 border border-emerald-200 px-4 py-2 text-sm text-emerald-700">✅ Payment complete</div>
+        )}
+
+        {/* Dispute buttons */}
+        {isCustomer && effectiveStatus === "Completed" && (
+          <Link
+            href={`/disputes/create?jobId=${job.id}&jobTitle=${encodeURIComponent(job.title)}`}
+            className="flex items-center gap-1.5 rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+          >
+            <AlertTriangle className="h-4 w-4" /> Dispute
+          </Link>
+        )}
+        {isVendor && effectiveStatus === "Paid" && (
+          <Link
+            href={`/disputes/create?jobId=${job.id}&jobTitle=${encodeURIComponent(job.title)}`}
+            className="flex items-center gap-1.5 rounded-md border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+          >
+            <AlertTriangle className="h-4 w-4" /> Dispute
+          </Link>
         )}
       </div>
 

@@ -60,6 +60,7 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<JobMessage> JobMessages => Set<JobMessage>();
     public DbSet<RecurringJobSeries> RecurringJobSeries => Set<RecurringJobSeries>();
     public DbSet<CustomerAddress> CustomerAddresses => Set<CustomerAddress>();
+    public DbSet<DisputeMessage> DisputeMessages => Set<DisputeMessage>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
