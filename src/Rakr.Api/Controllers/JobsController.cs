@@ -220,6 +220,9 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
         if (body.Title is not null) job.Title = body.Title;
         if (body.Description is not null) job.Description = body.Description;
         if (body.Categories is not null) job.Categories = body.Categories.ToList();
+        if (body.HourlyRateCents.HasValue) job.HourlyRateCents = body.HourlyRateCents.Value;
+        if (body.EstimatedHours.HasValue) job.EstimatedHours = body.EstimatedHours.Value;
+        if (body.MaxHours.HasValue) job.MaxHours = body.MaxHours.Value;
         if (body.BudgetCents.HasValue)
         {
             // Track original budget on first change
@@ -679,4 +682,4 @@ public record AssignVendorBody(Guid VendorRequestId, int? ConfirmedPriceCents = 
 public record UpdateStatusBody(string Status, string[]? CompletionPhotos = null);
 public record CancelJobBody(string? Reason);
 public record RescheduleJobBody(DateTime ScheduleStart, DateTime ScheduleEnd);
-public record EditJobBody(string? Title, string? Description, string[]? Categories, int? BudgetCents, string[]? Photos, DateTime? ScheduleStart = null, DateTime? ScheduleEnd = null, string? JobDetailsJson = null);
+public record EditJobBody(string? Title, string? Description, string[]? Categories, int? BudgetCents, string[]? Photos, DateTime? ScheduleStart = null, DateTime? ScheduleEnd = null, string? JobDetailsJson = null, int? HourlyRateCents = null, decimal? EstimatedHours = null, decimal? MaxHours = null);

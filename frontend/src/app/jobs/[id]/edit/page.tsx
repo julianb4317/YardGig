@@ -100,6 +100,9 @@ export default function EditJobPage() {
           scheduleStart: data.scheduleStart || undefined,
           scheduleEnd: data.scheduleEnd || undefined,
           jobDetailsJson: Object.keys(jobDetails).length > 0 ? JSON.stringify(jobDetails) : undefined,
+          hourlyRateCents: isHourly ? Math.round((data.hourlyRate ?? 0) * 100) : undefined,
+          estimatedHours: isHourly ? data.estimatedHours : undefined,
+          maxHours: isHourly ? data.maxHours : undefined,
         },
       });
     },
