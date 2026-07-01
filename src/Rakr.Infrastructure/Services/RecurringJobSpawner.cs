@@ -127,13 +127,20 @@ public class RecurringJobSpawner(IServiceScopeFactory scopeFactory, ILogger<Recu
         }
 
         // 4. Auto-release payment for jobs completed more than 48 hours ago without customer verification
+        // SKIP jobs that have an open/investigating dispute — payment held until dispute resolves
+        var disputedJobIds = await db.Disputes
+            .Where(d => d.Status == DisputeStatus.Open || d.Status == DisputeStatus.Investigating)
+            .Select(d => d.JobRequestId)
+            .ToListAsync(ct);
+
         var overdueCompletedJobs = await db.JobRequests
             .Include(j => j.Assignment).ThenInclude(a => a!.VendorProfile)
             .Include(j => j.CustomerProfile)
             .Where(j => j.Status == JobStatus.Completed
                 && j.Assignment != null
                 && j.Assignment.CompletedAt != null
-                && j.Assignment.CompletedAt.Value < now.AddHours(-48))
+                && j.Assignment.CompletedAt.Value < now.AddHours(-48)
+                && !disputedJobIds.Contains(j.Id))
             .ToListAsync(ct);
 
         foreach (var job in overdueCompletedJobs)

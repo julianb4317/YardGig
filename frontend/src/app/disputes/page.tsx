@@ -65,7 +65,7 @@ export default function DisputesListPage() {
                       {dispute.summary}
                     </Link>
                     <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
-                      <span className="font-mono">{dispute.disputeNumber}</span>
+                      <Link href={`/disputes/${dispute.id}`} className="font-mono text-brand-600 hover:text-brand-700 hover:underline">{dispute.disputeNumber}</Link>
                       <span>·</span>
                       <Link href={`/jobs/${dispute.jobRequestId}`} className="text-gray-600 hover:text-brand-600 hover:underline">
                         {dispute.jobTitle}

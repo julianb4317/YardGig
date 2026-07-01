@@ -375,13 +375,29 @@ public class AdminController(IAppDbContext db, ICurrentUserService currentUser) 
     [HttpPut("disputes/{id:guid}/resolve")]
     public async Task<IActionResult> ResolveDispute(Guid id, [FromBody] ResolveDisputeRequest request)
     {
-        var dispute = await db.Disputes.FindAsync(id);
+        var dispute = await db.Disputes
+            .Include(d => d.JobRequest)
+                .ThenInclude(j => j.Assignment)
+            .FirstOrDefaultAsync(d => d.Id == id);
         if (dispute is null) return NotFound();
 
         dispute.Status = DisputeStatus.Resolved;
         dispute.Resolution = request.Resolution;
         dispute.ResolvedById = currentUser.UserId;
         dispute.ResolvedAt = DateTime.UtcNow;
+
+        // Reset job status to Completed so the normal payment flow resumes
+        // (48-hour auto-release countdown starts from now)
+        if (dispute.JobRequest.Status == JobStatus.Disputed)
+        {
+            dispute.JobRequest.Status = JobStatus.Completed;
+            dispute.JobRequest.UpdatedAt = DateTime.UtcNow;
+            // Reset CompletedAt so the 48h window starts fresh from dispute resolution
+            if (dispute.JobRequest.Assignment != null)
+            {
+                dispute.JobRequest.Assignment.CompletedAt = DateTime.UtcNow;
+            }
+        }
 
         await CreateAuditEntryAsync("dispute.resolved", "Dispute", id, null,
             new { request.Resolution, request.Action });
