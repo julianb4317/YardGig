@@ -2,14 +2,6 @@
 
 import { apiClient } from "@/lib/api-client";
 
-export interface InitiatePaymentResponse {
-  clientSecret: string;
-  paymentIntentId: string;
-  amountCents: number;
-  platformFeeCents: number;
-  vendorNetCents: number;
-}
-
 export interface PaymentStatus {
   hasPayment: boolean;
   transaction?: {
@@ -21,20 +13,6 @@ export interface PaymentStatus {
     capturedAt: string | null;
     createdAt: string;
   };
-}
-
-export function initiatePayment(jobRequestId: string) {
-  return apiClient<InitiatePaymentResponse>("/api/payments/initiate", {
-    method: "POST",
-    body: { jobRequestId },
-  });
-}
-
-export function capturePayment(jobRequestId: string) {
-  return apiClient<{ transactionId: string }>("/api/payments/capture", {
-    method: "POST",
-    body: { jobRequestId },
-  });
 }
 
 export function getPaymentStatus(jobId: string) {

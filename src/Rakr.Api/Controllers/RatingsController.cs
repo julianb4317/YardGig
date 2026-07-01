@@ -20,7 +20,7 @@ public class RatingsController(IMediator mediator, IAppDbContext db) : Controlle
     {
         var result = await mediator.Send(command);
         if (!result.Succeeded)
-            return BadRequest(result.Errors);
+            return BadRequest(new { errors = result.Errors });
 
         return Ok(new { ratingId = result.Data });
     }

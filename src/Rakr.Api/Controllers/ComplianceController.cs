@@ -69,7 +69,7 @@ public class ComplianceController(IAppDbContext db, ICurrentUserService currentU
 
         var nonRevocable = new[] { "terms_of_service", "privacy_policy", "data_processing" };
         if (nonRevocable.Contains(request.ConsentType))
-            return BadRequest("This consent cannot be revoked. To withdraw, please delete your account.");
+            return BadRequest(new { errors = new[] { "This consent cannot be revoked. To withdraw, please delete your account." } });
 
         // Create revocation record
         var record = new ConsentRecord
@@ -101,11 +101,11 @@ public class ComplianceController(IAppDbContext db, ICurrentUserService currentU
 
         var validReasons = new[] { "spam", "fraud", "harassment", "inappropriate_content", "no_show", "unsafe_behavior", "other" };
         if (!validReasons.Contains(request.Reason))
-            return BadRequest("Invalid reason category.");
+            return BadRequest(new { errors = new[] { "Invalid reason category." } });
 
         var validEntityTypes = new[] { "User", "JobRequest", "Rating", "VendorProfile" };
         if (!validEntityTypes.Contains(request.EntityType))
-            return BadRequest("Invalid entity type.");
+            return BadRequest(new { errors = new[] { "Invalid entity type." } });
 
         var report = new AbuseReport
         {

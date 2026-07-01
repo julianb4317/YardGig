@@ -5,13 +5,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { Spinner } from "@/components/ui/spinner";
 import { createJob } from "@/lib/api/jobs";
 import { ApiError } from "@/lib/api-client";
 import { JOB_CATEGORIES, CATEGORY_LABELS } from "@/lib/types";
+import { CategoryDetailsFields, type JobDetails } from "@/components/jobs/category-details-fields";
 
 const RECURRING_FREQUENCIES = [
   { value: "weekly", label: "Weekly" },
@@ -26,7 +27,11 @@ const createJobSchema = z.object({
   description: z.string().min(10, "Describe the work (min 10 chars)").max(5000),
   categories: z.array(z.string()).min(1, "Select at least one category").max(5),
   address: z.string().min(5, "Full address required"),
-  budgetDollars: z.number({ invalid_type_error: "Enter a budget" }).min(1, "Min $1").max(10000, "Max $10,000"),
+  pricingType: z.enum(["fixed", "hourly"]).default("fixed"),
+  budgetDollars: z.number({ invalid_type_error: "Enter a budget" }).min(1, "Min $1").max(10000, "Max $10,000").optional(),
+  hourlyRate: z.number().optional(),
+  estimatedHours: z.number().optional(),
+  maxHours: z.number().optional(),
   scheduleStart: z.string().optional(),
   scheduleEnd: z.string().optional(),
   isRecurring: z.boolean().optional(),
@@ -35,6 +40,47 @@ const createJobSchema = z.object({
   recurringTime: z.string().optional(),
 }).superRefine((data, ctx) => {
   const now = new Date();
+
+  if (data.pricingType === "fixed") {
+    if (!data.budgetDollars || data.budgetDollars < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Budget is required for fixed-price jobs (min $1)",
+        path: ["budgetDollars"],
+      });
+    }
+  }
+
+  if (data.pricingType === "hourly") {
+    if (!data.hourlyRate || data.hourlyRate < 5) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Hourly rate required (min $5)",
+        path: ["hourlyRate"],
+      });
+    }
+    if (!data.estimatedHours || data.estimatedHours < 0.5) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Estimated hours required (min 0.5)",
+        path: ["estimatedHours"],
+      });
+    }
+    if (!data.maxHours || data.maxHours < 0.5) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Max hours required (min 0.5)",
+        path: ["maxHours"],
+      });
+    }
+    if (data.maxHours && data.estimatedHours && data.maxHours < data.estimatedHours) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Max hours must be ≥ estimated hours",
+        path: ["maxHours"],
+      });
+    }
+  }
 
   if (data.scheduleStart) {
     const start = new Date(data.scheduleStart);
@@ -103,7 +149,7 @@ function CreateJobFormContent() {
     formState: { errors },
   } = useForm<CreateJobForm>({
     resolver: zodResolver(createJobSchema),
-    defaultValues: { categories: [], isRecurring: false, recurringDays: [] },
+    defaultValues: { categories: [], isRecurring: false, recurringDays: [], pricingType: "fixed" },
   });
 
   // Pre-fill from query params (clone job scenario)
@@ -131,6 +177,11 @@ function CreateJobFormContent() {
 
   const selectedCategories = watch("categories");
   const isRecurring = useWatch({ control, name: "isRecurring" });
+  const pricingType = useWatch({ control, name: "pricingType" });
+  const [jobDetails, setJobDetails] = useState<JobDetails>({});
+  const hourlyRate = watch("hourlyRate");
+  const estimatedHours = watch("estimatedHours");
+  const maxHours = watch("maxHours");
   const selectedDays = watch("recurringDays") ?? [];
 
   const toggleCategory = (cat: string) => {
@@ -146,20 +197,31 @@ function CreateJobFormContent() {
   };
 
   const mutation = useMutation({
-    mutationFn: (data: CreateJobForm) =>
-      createJob({
+    mutationFn: (data: CreateJobForm) => {
+      const isHourly = data.pricingType === "hourly";
+      const budgetCents = isHourly
+        ? Math.round((data.hourlyRate ?? 0) * (data.maxHours ?? 0) * 100)
+        : Math.round((data.budgetDollars ?? 0) * 100);
+
+      return createJob({
         title: data.title,
         description: data.description,
         categories: data.categories,
         address: data.address,
-        budgetCents: Math.round(data.budgetDollars * 100),
+        budgetCents,
         scheduleStart: data.scheduleStart || undefined,
         scheduleEnd: data.scheduleEnd || undefined,
         isRecurring: data.isRecurring || false,
         recurringFrequency: data.isRecurring ? data.recurringFrequency : undefined,
         recurringDays: data.isRecurring ? data.recurringDays : undefined,
         recurringTime: data.isRecurring ? data.recurringTime : undefined,
-      }),
+        pricingType: data.pricingType,
+        hourlyRateCents: isHourly ? Math.round((data.hourlyRate ?? 0) * 100) : undefined,
+        estimatedHours: isHourly ? data.estimatedHours : undefined,
+        maxHours: isHourly ? data.maxHours : undefined,
+        jobDetailsJson: Object.keys(jobDetails).length > 0 ? JSON.stringify(jobDetails) : undefined,
+      });
+    },
     onSuccess: (result) => {
       toast.success("Job posted! Vendors will see it on the map.");
       router.push(`/jobs/${result.id}`);
@@ -220,6 +282,15 @@ function CreateJobFormContent() {
           {errors.categories && <p className="mt-1 text-xs text-red-600">{errors.categories.message}</p>}
         </div>
 
+        {/* Category-specific details */}
+        {selectedCategories && selectedCategories.length > 0 && (
+          <CategoryDetailsFields
+            categories={selectedCategories}
+            value={jobDetails}
+            onChange={setJobDetails}
+          />
+        )}
+
         {/* Address */}
         <div>
           <label className="block text-sm font-medium text-gray-700">Address</label>
@@ -232,20 +303,113 @@ function CreateJobFormContent() {
           <p className="mt-1 text-xs text-gray-400">Exact address shared only after vendor assignment.</p>
         </div>
 
-        {/* Budget */}
+        {/* Pricing Type */}
         <div>
-          <label className="block text-sm font-medium text-gray-700">Budget ($)</label>
-          <input
-            {...register("budgetDollars", { valueAsNumber: true })}
-            type="number"
-            min={1}
-            max={10000}
-            step={1}
-            placeholder="50"
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-          />
-          {errors.budgetDollars && <p className="mt-1 text-xs text-red-600">{errors.budgetDollars.message}</p>}
+          <label className="block text-sm font-medium text-gray-700 mb-2">Pricing</label>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                value="fixed"
+                {...register("pricingType")}
+                className="h-4 w-4 border-gray-300 text-brand-600 focus:ring-brand-500"
+              />
+              <span className="text-sm text-gray-700">Fixed Price</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                value="hourly"
+                {...register("pricingType")}
+                className="h-4 w-4 border-gray-300 text-brand-600 focus:ring-brand-500"
+              />
+              <span className="text-sm text-gray-700">Hourly Rate</span>
+            </label>
+          </div>
         </div>
+
+        {/* Fixed Price Budget */}
+        {pricingType === "fixed" && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Budget ($)</label>
+            <input
+              {...register("budgetDollars", { valueAsNumber: true })}
+              type="number"
+              min={1}
+              max={10000}
+              step={1}
+              placeholder="50"
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+            {errors.budgetDollars && <p className="mt-1 text-xs text-red-600">{errors.budgetDollars.message}</p>}
+          </div>
+        )}
+
+        {/* Hourly Rate Fields */}
+        {pricingType === "hourly" && (
+          <div className="space-y-4 rounded-lg border border-gray-200 p-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Hourly Rate ($)</label>
+                <input
+                  {...register("hourlyRate", { valueAsNumber: true })}
+                  type="number"
+                  min={5}
+                  max={500}
+                  step={1}
+                  placeholder="25"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+                {errors.hourlyRate && <p className="mt-1 text-xs text-red-600">{errors.hourlyRate.message}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Estimated Hours</label>
+                <input
+                  {...register("estimatedHours", { valueAsNumber: true, onChange: (e) => {
+                    const est = parseFloat(e.target.value);
+                    if (est > 0 && (!maxHours || maxHours < est)) {
+                      setValue("maxHours", Math.round(est * 1.5 * 10) / 10);
+                    }
+                  }})}
+                  type="number"
+                  min={0.5}
+                  max={100}
+                  step={0.5}
+                  placeholder="3"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+                {errors.estimatedHours && <p className="mt-1 text-xs text-red-600">{errors.estimatedHours.message}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Max Hours</label>
+                <input
+                  {...register("maxHours", { valueAsNumber: true })}
+                  type="number"
+                  min={0.5}
+                  max={100}
+                  step={0.5}
+                  placeholder="4.5"
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+                {errors.maxHours && <p className="mt-1 text-xs text-red-600">{errors.maxHours.message}</p>}
+              </div>
+            </div>
+
+            {/* Computed values */}
+            {hourlyRate && estimatedHours && maxHours && (
+              <div className="grid grid-cols-2 gap-4 text-sm border-t pt-3">
+                <div>
+                  <span className="text-gray-500">Estimated Budget</span>
+                  <p className="font-medium text-gray-900">${(hourlyRate * estimatedHours).toFixed(2)}</p>
+                </div>
+                <div>
+                  <span className="text-gray-500">Maximum Charge</span>
+                  <p className="font-medium text-gray-900">${(hourlyRate * maxHours).toFixed(2)}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Schedule */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -339,25 +503,33 @@ function CreateJobFormContent() {
           )}
         </div>
 
-        {/* Escrow notice */}
+        {/* Fee breakdown & escrow notice */}
         {isRecurring ? (
           <div className="rounded-lg border border-purple-200 bg-purple-50 p-4">
             <p className="text-sm font-medium text-purple-800">🔄 Recurring payment schedule</p>
             <p className="mt-1 text-xs text-purple-600">
               Your card on file will be charged the morning of each scheduled occurrence — not upfront.
-              Funds are escrowed until you verify completion, same as a one-off job, just repeated automatically.
+              The fees below apply to each occurrence. Funds are held until you verify completion.
               A valid payment method is required to set up a recurring job.
             </p>
           </div>
         ) : (
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-            <p className="text-sm font-medium text-blue-800">💳 Payment held in escrow</p>
+            <p className="text-sm font-medium text-blue-800">🔒 Secure Authorization Hold</p>
             <p className="mt-1 text-xs text-blue-600">
-              Your card on file will be charged the budget amount when you post this job. 
-              Funds are held securely in escrow until you verify the work is completed. 
-              You won't be charged again — the escrowed amount is released to the vendor only after your approval.
+              A hold will be placed on your card when you post this job — you are NOT charged yet.
+              The hold is only captured when you assign a vendor. If you cancel before that, the hold is released at zero cost.
+              After the vendor completes the work and you verify, funds are released to them.
             </p>
           </div>
+        )}
+
+        {/* Live fee preview */}
+        {pricingType === "fixed" && watch("budgetDollars") && watch("budgetDollars")! > 0 && (
+          <FeePreview budgetDollars={watch("budgetDollars")!} />
+        )}
+        {pricingType === "hourly" && hourlyRate && maxHours && hourlyRate > 0 && maxHours > 0 && (
+          <FeePreview budgetDollars={hourlyRate * maxHours} label="Maximum fees (based on max hours)" />
         )}
 
         {/* Submit */}
@@ -367,9 +539,48 @@ function CreateJobFormContent() {
           className="w-full rounded-md bg-brand-600 py-3 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {mutation.isPending && <Spinner className="h-4 w-4 border-white border-t-transparent" />}
-          Post Job & Hold Payment
+          Post Job & Authorize Hold
         </button>
       </form>
+    </div>
+  );
+}
+
+function FeePreview({ budgetDollars, label }: { budgetDollars: number; label?: string }) {
+  const budgetCents = Math.round((budgetDollars || 0) * 100);
+
+  // Calculate fees client-side for instant preview (matches backend logic: 10% + 2.9% + $0.30)
+  if (budgetCents < 100) return null;
+
+  const trustFeeCents = Math.ceil(budgetCents * 0.10);
+  const subtotal = budgetCents + trustFeeCents;
+  const processingFeeCents = Math.ceil(subtotal * 0.029) + 30;
+  const totalCents = subtotal + processingFeeCents;
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+      <p className="text-sm font-semibold text-gray-700 mb-3">{label || "Fee Breakdown"}</p>
+      <div className="space-y-2 text-sm">
+        <div className="flex justify-between">
+          <span className="text-gray-600">Job Budget (goes to vendor)</span>
+          <span className="font-medium">${(budgetCents / 100).toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">Trust & Escrow Fee (10%)</span>
+          <span className="font-medium">${(trustFeeCents / 100).toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">Secure Payment Processing (2.9% + $0.30)</span>
+          <span className="font-medium">${(processingFeeCents / 100).toFixed(2)}</span>
+        </div>
+        <div className="border-t pt-2 flex justify-between font-semibold">
+          <span className="text-gray-900">Total</span>
+          <span className="text-gray-900">${(totalCents / 100).toFixed(2)}</span>
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-gray-400">
+        Your vendor receives the full ${(budgetCents / 100).toFixed(2)} — fees are separate.
+      </p>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
-import { Star, MapPin, DollarSign, CheckCircle, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Star, MapPin, DollarSign, CheckCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
@@ -196,6 +196,10 @@ export default function JobRequestsPage() {
   return (
     <AuthGuard requiredRole="Customer">
       <div className="mx-auto max-w-2xl px-4 py-8">
+        <button onClick={() => router.push(`/jobs/${id}`)} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-4">
+          <ArrowLeft className="h-4 w-4" /> Back to Job
+        </button>
+
         <h1 className="text-2xl font-bold">Vendor Requests</h1>
         <p className="mt-1 text-sm text-gray-500">Review and accept a vendor for your job.</p>
 

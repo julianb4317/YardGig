@@ -82,7 +82,7 @@ public class ProfilesController(IAppDbContext db, ICurrentUserService currentUse
         profile.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        return Ok();
+        return Ok(new { success = true });
     }
 
     /// <summary>
@@ -144,7 +144,7 @@ public class ProfilesController(IAppDbContext db, ICurrentUserService currentUse
         profile.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        return Ok();
+        return Ok(new { success = true });
     }
 
     /// <summary>

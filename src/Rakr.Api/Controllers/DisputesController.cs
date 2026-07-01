@@ -21,16 +21,16 @@ public class DisputesController(IAppDbContext db, ICurrentUserService currentUse
         if (currentUser.UserId is null) return Unauthorized();
 
         var job = await db.JobRequests.FindAsync(request.JobRequestId);
-        if (job is null) return NotFound("Job not found.");
+        if (job is null) return NotFound(new { errors = new[] { "Job not found." } });
 
         if (job.Status != JobStatus.Completed && job.Status != JobStatus.Paid)
-            return BadRequest("Can only dispute completed or paid jobs.");
+            return BadRequest(new { errors = new[] { "Can only dispute completed or paid jobs." } });
 
         var existingDispute = await db.Disputes
             .AnyAsync(d => d.JobRequestId == request.JobRequestId);
 
         if (existingDispute)
-            return BadRequest("A dispute already exists for this job.");
+            return BadRequest(new { errors = new[] { "A dispute already exists for this job." } });
 
         var dispute = new Dispute
         {

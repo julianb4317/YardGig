@@ -13,7 +13,8 @@ export function NotificationBell() {
     queryKey: ["unreadCount"],
     queryFn: () => fetchNotifications(true, 50),
     enabled: authenticated,
-    refetchInterval: 10_000,
+    refetchInterval: 30_000,
+    staleTime: 0, // Always fetch fresh on mount (e.g., after sign-in)
   });
 
   const unreadCount = data?.length ?? 0;

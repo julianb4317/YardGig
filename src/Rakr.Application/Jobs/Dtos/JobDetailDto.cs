@@ -21,5 +21,12 @@ public record JobDetailDto(
     bool IsRecurring = false,
     string? RecurringFrequency = null,
     string[]? RecurringDays = null,
-    string? RecurringTime = null
+    string? RecurringTime = null,
+    string PricingType = "fixed",
+    int? HourlyRateCents = null,
+    decimal? EstimatedHours = null,
+    decimal? MaxHours = null,
+    DateTime? AssignmentStartedAt = null,
+    DateTime? AssignmentCompletedAt = null,
+    string? JobDetailsJson = null
 );

@@ -1,21 +1,26 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
-import { ArrowLeft, Calendar, MapPin, Tag, DollarSign, Clock, RefreshCw } from "lucide-react";
+import { useState, useRef } from "react";
+import { ArrowLeft, Calendar, MapPin, Tag, DollarSign, Clock, RefreshCw, Upload, Camera } from "lucide-react";
 import Link from "next/link";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { ErrorState } from "@/components/ui/error-state";
-import { PageLoader } from "@/components/ui/spinner";
+import { PageLoader, Spinner } from "@/components/ui/spinner";
+import { PhotoGrid } from "@/components/ui/photo-lightbox";
+import { CategoryDetailsDisplay } from "@/components/jobs/category-details-fields";
 import { JobActions } from "@/components/jobs/job-actions";
 import { PaymentButton } from "@/components/payments/payment-button";
 import { RequestJobDialog } from "@/components/jobs/request-job-dialog";
 import { JobChat } from "@/components/jobs/job-chat";
 import { fetchJobDetail } from "@/lib/api/jobs";
+import { uploadFiles } from "@/lib/api/uploads";
 import { formatCents, cn } from "@/lib/utils";
 import { CATEGORY_LABELS } from "@/lib/types";
 import { hasRole } from "@/lib/auth";
+import { apiClient } from "@/lib/api-client";
+import { toast } from "sonner";
 
 const STATUS_COLORS: Record<string, string> = {
   Open: "bg-green-100 text-green-800",
@@ -71,6 +76,11 @@ export default function JobDetailPage() {
           <span className="flex items-center gap-1.5 font-semibold text-gray-900 text-base">
             <DollarSign className="h-4 w-4 text-brand-600" />
             {formatCents(job.budgetCents)}
+            {job.originalBudgetCents && job.originalBudgetCents !== job.budgetCents && (
+              <span className={`text-xs font-medium ${job.budgetCents > job.originalBudgetCents ? "text-green-600" : "text-red-600"}`}>
+                ({job.budgetCents > job.originalBudgetCents ? "↑" : "↓"} from {formatCents(job.originalBudgetCents)})
+              </span>
+            )}
           </span>
 
           <span className="flex items-center gap-1.5">
@@ -108,6 +118,9 @@ export default function JobDetailPage() {
           <p className="mt-2 text-gray-700 whitespace-pre-wrap">{job.description}</p>
         </div>
 
+        {/* Category-specific job details */}
+        <CategoryDetailsDisplay categories={job.categories} detailsJson={job.jobDetailsJson} />
+
         {/* Recurring schedule info */}
         {job.isRecurring && (
           <div className="mt-4 rounded-lg border border-brand-200 bg-brand-50 p-4">
@@ -129,23 +142,47 @@ export default function JobDetailPage() {
           </div>
         )}
 
-        {/* Photos */}
-        {job.photos && job.photos.length > 0 && (
-          <div className="mt-6">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
-              {job.status === "Completed" || job.status === "Paid" || job.status === "Closed" ? "Completion Photos" : "Photos"}
-            </h2>
-            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {job.photos.map((url, i) => (
-                <img key={i} src={url} alt={`Photo ${i + 1}`} className="rounded-lg object-cover h-32 w-full" />
-              ))}
+        {/* Hourly pricing info */}
+        {job.pricingType === "hourly" && (
+          <div className="mt-4 rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-indigo-600" />
+              <span className="text-sm font-medium text-indigo-800">Hourly Pricing</span>
+            </div>
+            <div className="mt-2 text-sm text-indigo-700">
+              <span className="font-medium">${((job.hourlyRateCents ?? 0) / 100).toFixed(0)}/hr</span>
+              {job.estimatedHours && <span> · Est. {job.estimatedHours}h</span>}
+              {job.maxHours && <span> · Max {job.maxHours}h</span>}
             </div>
           </div>
+        )}
+
+        {/* Photos */}
+        {job.photos && job.photos.length > 0 && (
+          <PhotoGrid
+            photos={job.photos}
+            label={job.status === "Completed" || job.status === "Paid" || job.status === "Closed" ? "Completion Photos" : "Photos"}
+          />
+        )}
+
+        {/* Customer: upload reference photos (optional) */}
+        {hasRole("Customer") && ["Open", "Requested", "Assigned"].includes(job.status) && (
+          <CustomerPhotoUpload jobId={job.id} existingPhotos={job.photos} />
         )}
 
         {/* Job Actions */}
         <div className="mt-8 border-t pt-6 space-y-4">
           <JobActions job={job} />
+
+          {/* Customer: Edit job (only when Open) */}
+          {hasRole("Customer") && job.status === "Open" && (
+            <Link
+              href={`/jobs/${job.id}/edit`}
+              className="inline-flex items-center gap-2 rounded-md border border-brand-600 px-4 py-2 text-sm font-medium text-brand-600 hover:bg-brand-50"
+            >
+              ✏️ Edit Job
+            </Link>
+          )}
 
           {/* Post Again button for past jobs */}
           {hasRole("Customer") && ["Paid", "Closed", "Cancelled", "Expired"].includes(job.status) && (
@@ -154,7 +191,18 @@ export default function JobDetailPage() {
 
           {/* Customer: payment button when completed */}
           {hasRole("Customer") && job.status === "Completed" && (
-            <PaymentButton jobId={job.id} budgetCents={job.budgetCents} assignedVendorId={job.assignedVendorUserId ?? undefined} assignedVendorName={job.assignedVendorName ?? undefined} />
+            <PaymentButton
+              jobId={job.id}
+              budgetCents={job.budgetCents}
+              assignedVendorId={job.assignedVendorUserId ?? undefined}
+              assignedVendorName={job.assignedVendorName ?? undefined}
+              pricingType={job.pricingType}
+              hourlyRateCents={job.hourlyRateCents}
+              estimatedHours={job.estimatedHours}
+              maxHours={job.maxHours}
+              assignmentStartedAt={job.assignmentStartedAt}
+              assignmentCompletedAt={job.assignmentCompletedAt}
+            />
           )}
 
           {/* Customer: view vendor requests */}
@@ -168,8 +216,16 @@ export default function JobDetailPage() {
           )}
 
           {/* Vendor: request this job */}
-          {hasRole("Vendor") && (job.status === "Open" || job.status === "Requested") && (
+          {hasRole("Vendor") && (job.status === "Open" || job.status === "Requested") && !job.vendorHasRequested && (
             <VendorRequestSection jobId={job.id} jobTitle={job.title} />
+          )}
+          {hasRole("Vendor") && (job.status === "Open" || job.status === "Requested") && job.vendorHasRequested && (
+            <button
+              disabled
+              className="w-full sm:w-auto rounded-md bg-gray-400 px-6 py-3 text-sm font-medium text-white cursor-not-allowed opacity-70"
+            >
+              ✓ Request Submitted
+            </button>
           )}
 
           {/* Chat: available once a vendor is assigned */}
@@ -233,5 +289,84 @@ function PostAgainButton({ job }: { job: { title: string; description: string; c
       <RefreshCw className="h-4 w-4" />
       Post Again
     </button>
+  );
+}
+
+function CustomerPhotoUpload({ jobId, existingPhotos }: { jobId: string; existingPhotos: string[] | null }) {
+  const queryClient = useQueryClient();
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const camRef = useRef<HTMLInputElement>(null);
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    setPhotos((p) => [...p, ...files].slice(0, 5));
+    e.target.value = "";
+  };
+
+  const handleUpload = async () => {
+    if (photos.length === 0) return;
+    setIsUploading(true);
+    try {
+      const uploadedUrls = await uploadFiles(photos, "job_photo");
+      const allPhotos = [...(existingPhotos ?? []), ...uploadedUrls];
+      // Update the job with the new photos
+      await apiClient(`/api/jobs/${jobId}`, {
+        method: "PUT",
+        body: { photos: allPhotos },
+      });
+      toast.success("Photos uploaded!");
+      setPhotos([]);
+      queryClient.invalidateQueries({ queryKey: ["job", jobId] });
+    } catch {
+      toast.error("Failed to upload photos.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <div className="mt-6">
+      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Reference Photos (Optional)</h2>
+      <p className="mt-1 text-xs text-gray-400">Add photos to help the vendor understand the work needed.</p>
+
+      {photos.length > 0 && (
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          {photos.map((f, i) => (
+            <div key={i} className="relative">
+              <img src={URL.createObjectURL(f)} alt="" className="h-20 w-full rounded object-cover" />
+              <button onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center">✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-2 flex gap-2">
+        {photos.length < 5 && (
+          <>
+            <button type="button" onClick={() => fileRef.current?.click()} className="flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm hover:bg-gray-50">
+              <Upload className="h-4 w-4" /> Browse
+            </button>
+            <button type="button" onClick={() => camRef.current?.click()} className="flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm hover:bg-gray-50">
+              <Camera className="h-4 w-4" /> Camera
+            </button>
+          </>
+        )}
+        {photos.length > 0 && (
+          <button
+            onClick={handleUpload}
+            disabled={isUploading}
+            className="flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+          >
+            {isUploading && <Spinner className="h-4 w-4 border-white border-t-transparent" />}
+            {isUploading ? "Uploading..." : "Save Photos"}
+          </button>
+        )}
+      </div>
+
+      <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={onFileChange} />
+      <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFileChange} />
+    </div>
   );
 }

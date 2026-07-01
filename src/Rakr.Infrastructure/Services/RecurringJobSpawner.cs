@@ -95,6 +95,38 @@ public class RecurringJobSpawner(IServiceScopeFactory scopeFactory, ILogger<Recu
         }
 
         await db.SaveChangesAsync(ct);
+
+        // 3. Auto-complete hourly jobs that exceeded max hours + 2h buffer
+        var overdueHourlyJobs = await db.JobRequests
+            .Include(j => j.Assignment)
+            .Include(j => j.CustomerProfile)
+            .Where(j => j.PricingType == "hourly"
+                && j.Status == JobStatus.InProgress
+                && j.Assignment != null
+                && j.Assignment.StartedAt != null
+                && j.MaxHours.HasValue)
+            .ToListAsync(ct);
+
+        foreach (var job in overdueHourlyJobs)
+        {
+            var elapsed = (DateTime.UtcNow - job.Assignment!.StartedAt!.Value).TotalHours;
+            var maxWithBuffer = (double)job.MaxHours!.Value + 2.0;
+            if (elapsed > maxWithBuffer)
+            {
+                job.Status = JobStatus.Completed;
+                job.Assignment.CompletedAt = DateTime.UtcNow;
+                job.UpdatedAt = DateTime.UtcNow;
+
+                // Notify customer
+                await notifications.SendInAppNotificationAsync(
+                    job.CustomerProfile.UserId, "hourly_auto_completed",
+                    "Job auto-completed",
+                    $"Your hourly job \"{job.Title}\" was automatically marked complete after exceeding the maximum time. Please review and verify.",
+                    new { jobId = job.Id }, ct);
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
     }
 
     private async Task SpawnInstance(
@@ -174,7 +206,7 @@ public class RecurringJobSpawner(IServiceScopeFactory scopeFactory, ILogger<Recu
 
         var chargeResult = await paymentService.ChargeCustomerAsync(
             card.StripeCustomerId, card.StripePaymentMethodId,
-            fees.GrossAmountCents, "usd", $"escrow_{childJob.Id}",
+            fees.TotalChargeCents, "usd", $"escrow_{childJob.Id}",
             $"Rakr recurring: {template.Title[..Math.Min(template.Title.Length, 25)]}", ct);
 
         if (chargeResult.Succeeded)
@@ -184,9 +216,12 @@ public class RecurringJobSpawner(IServiceScopeFactory scopeFactory, ILogger<Recu
                 JobRequestId = childJob.Id,
                 CustomerProfileId = series.CustomerProfileId,
                 StripePaymentIntentId = chargeResult.PaymentIntentId,
-                AmountCents = fees.GrossAmountCents,
-                PlatformFeeCents = fees.PlatformFeeCents,
-                VendorAmountCents = fees.VendorNetCents,
+                AmountCents = fees.TotalChargeCents,
+                BudgetCents = fees.BudgetCents,
+                TrustFeeCents = fees.TrustFeeCents,
+                ProcessingFeeCents = fees.ProcessingFeeCents,
+                PlatformFeeCents = fees.PlatformRevenueCents,
+                VendorAmountCents = fees.BudgetCents,
                 Status = EscrowStatus.Held
             });
         }

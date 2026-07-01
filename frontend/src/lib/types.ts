@@ -41,6 +41,15 @@ export interface JobDetail {
   recurringFrequency?: string | null;
   recurringDays?: string[] | null;
   recurringTime?: string | null;
+  vendorHasRequested?: boolean | null;
+  originalBudgetCents?: number | null;
+  pricingType?: string;
+  hourlyRateCents?: number | null;
+  estimatedHours?: number | null;
+  maxHours?: number | null;
+  assignmentStartedAt?: string | null;
+  assignmentCompletedAt?: string | null;
+  jobDetailsJson?: string | null;
 }
 
 export interface MapPin {

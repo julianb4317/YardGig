@@ -479,7 +479,7 @@ public class AdminController(IAppDbContext db, ICurrentUserService currentUser) 
     {
         var payout = await db.Payouts.FindAsync(id);
         if (payout is null) return NotFound();
-        if (payout.Status != PayoutStatus.Failed) return BadRequest("Only failed payouts can be retried.");
+        if (payout.Status != PayoutStatus.Failed) return BadRequest(new { errors = new[] { "Only failed payouts can be retried." } });
 
         payout.Status = PayoutStatus.Pending;
 

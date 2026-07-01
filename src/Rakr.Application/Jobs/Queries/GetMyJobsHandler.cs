@@ -105,7 +105,14 @@ public class GetMyJobsHandler(IAppDbContext db) : IRequestHandler<GetMyJobsQuery
                 j.IsRecurring,
                 j.RecurringFrequency,
                 j.RecurringDays?.ToArray(),
-                j.RecurringTime
+                j.RecurringTime,
+                j.PricingType,
+                j.HourlyRateCents,
+                j.EstimatedHours,
+                j.MaxHours,
+                j.Assignment?.StartedAt,
+                j.Assignment?.CompletedAt,
+                j.JobDetailsJson
             );
         }).ToList();
 

@@ -9,14 +9,17 @@ public interface ICommissionService
     Task<decimal> GetEffectiveRateAsync(Guid vendorProfileId, string[] categories, CancellationToken ct = default);
 
     /// <summary>
-    /// Calculates fee breakdown for a given gross amount.
+    /// Calculates the customer-facing fee breakdown.
+    /// Customer pays: Budget + Trust & Escrow Fee (10%) + Payment Processing (2.9% + $0.30).
+    /// Vendor receives: Full budget amount.
     /// </summary>
-    Task<FeeBreakdown> CalculateFeesAsync(int grossAmountCents, Guid vendorProfileId, string[] categories, CancellationToken ct = default);
+    Task<FeeBreakdown> CalculateFeesAsync(int budgetCents, Guid vendorProfileId, string[] categories, CancellationToken ct = default);
 }
 
 public record FeeBreakdown(
-    int GrossAmountCents,
-    int PlatformFeeCents,
-    int StripeFeeEstimateCents,
-    int VendorNetCents
+    int BudgetCents,          // What the vendor gets (the job budget)
+    int TrustFeeCents,        // 10% of budget — platform revenue
+    int ProcessingFeeCents,   // 2.9% + $0.30 of total transaction
+    int TotalChargeCents,     // What the customer pays (budget + fees)
+    int PlatformRevenueCents  // Trust fee (processing fee goes to Stripe)
 );

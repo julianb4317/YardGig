@@ -39,6 +39,11 @@ export interface CreateJobPayload {
   recurringFrequency?: string;
   recurringDays?: string[];
   recurringTime?: string;
+  pricingType?: string;
+  hourlyRateCents?: number;
+  estimatedHours?: number;
+  maxHours?: number;
+  jobDetailsJson?: string;
 }
 
 export function createJob(payload: CreateJobPayload) {
@@ -137,4 +142,33 @@ export interface ScheduleConflict {
 
 export function checkScheduleConflicts(jobId: string) {
   return apiClient<{ conflicts: ScheduleConflict[] }>(`/api/jobs/${jobId}/check-conflicts`);
+}
+
+// ─── Fee Preview ───
+
+export interface FeePreviewResponse {
+  budgetCents: number;
+  trustFeeCents: number;
+  processingFeeCents: number;
+  totalChargeCents: number;
+}
+
+export function getFeePreview(budgetCents: number) {
+  return apiClient<FeePreviewResponse>(`/api/payments/fee-preview?budgetCents=${budgetCents}`);
+}
+
+// ─── Hourly Job Payment ───
+
+export interface ChargeHourlyResponse {
+  transactionId: string;
+  vendorEarnedCents: number;
+  actualHours: number;
+  vendorUserId?: string;
+}
+
+export function chargeHourlyJob(jobRequestId: string, approvedHours: number) {
+  return apiClient<ChargeHourlyResponse>("/api/payments/charge-hourly", {
+    method: "POST",
+    body: { jobRequestId, approvedHours },
+  });
 }

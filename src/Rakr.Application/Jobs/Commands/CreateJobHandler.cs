@@ -62,6 +62,13 @@ public class CreateJobHandler(
                 return Result<Guid>.Failure("A payment method is required for recurring jobs. Please add a card first.");
         }
 
+        // For hourly jobs, BudgetCents = HourlyRateCents × MaxHours (max auth hold amount)
+        var effectiveBudgetCents = request.BudgetCents;
+        if (request.PricingType == "hourly" && request.HourlyRateCents.HasValue && request.MaxHours.HasValue)
+        {
+            effectiveBudgetCents = (int)Math.Ceiling(request.HourlyRateCents.Value * (double)request.MaxHours.Value);
+        }
+
         var job = new JobRequest
         {
             CustomerProfileId = customerProfile.Id,
@@ -71,11 +78,16 @@ public class CreateJobHandler(
             Address = request.Address,
             Location = location,
             Status = JobStatus.Open,
-            BudgetCents = request.BudgetCents,
+            BudgetCents = effectiveBudgetCents,
+            PricingType = request.PricingType,
+            HourlyRateCents = request.HourlyRateCents,
+            EstimatedHours = request.EstimatedHours,
+            MaxHours = request.MaxHours,
             ScheduleStart = request.ScheduleStart,
             ScheduleEnd = request.ScheduleEnd,
             Photos = request.Photos?.ToList(),
             ExpiresAt = DateTime.UtcNow.AddDays(7),
+            JobDetailsJson = request.JobDetailsJson,
             IsRecurring = request.IsRecurring,
             RecurringFrequency = request.RecurringFrequency,
             RecurringDays = request.RecurringDays?.ToList(),
@@ -106,7 +118,8 @@ public class CreateJobHandler(
             return Result<Guid>.Success(job.Id);
         }
 
-        // ESCROW: Charge customer's card and hold funds (one-off jobs only)
+        // ESCROW: Place authorization hold on customer's card (one-off jobs only)
+        // Funds are NOT captured yet — that happens when vendor is assigned
         var card = await db.CustomerPaymentMethods
             .FirstOrDefaultAsync(pm => pm.CustomerProfileId == customerProfile.Id && pm.IsDefault, cancellationToken);
 
@@ -115,26 +128,29 @@ public class CreateJobHandler(
             var fees = await commissionService.CalculateFeesAsync(
                 request.BudgetCents, Guid.Empty, request.Categories, cancellationToken);
 
-            var chargeResult = await paymentService.ChargeCustomerAsync(
+            var authResult = await paymentService.AuthorizePaymentAsync(
                 card.StripeCustomerId, card.StripePaymentMethodId,
-                fees.GrossAmountCents, "usd", $"escrow_{job.Id}",
-                $"Rakr escrow: {request.Title[..Math.Min(request.Title.Length, 30)]}", cancellationToken);
+                fees.TotalChargeCents, "usd", $"auth_{job.Id}",
+                $"Rakr hold: {request.Title[..Math.Min(request.Title.Length, 30)]}", cancellationToken);
 
-            if (chargeResult.Succeeded)
+            if (authResult.Succeeded)
             {
                 db.EscrowTransactions.Add(new EscrowTransaction
                 {
                     JobRequestId = job.Id,
                     CustomerProfileId = customerProfile.Id,
-                    StripePaymentIntentId = chargeResult.PaymentIntentId,
-                    AmountCents = fees.GrossAmountCents,
-                    PlatformFeeCents = fees.PlatformFeeCents,
-                    VendorAmountCents = fees.VendorNetCents,
-                    Status = EscrowStatus.Held
+                    StripePaymentIntentId = authResult.PaymentIntentId,
+                    AmountCents = fees.TotalChargeCents,
+                    BudgetCents = fees.BudgetCents,
+                    TrustFeeCents = fees.TrustFeeCents,
+                    ProcessingFeeCents = fees.ProcessingFeeCents,
+                    PlatformFeeCents = fees.TrustFeeCents,
+                    VendorAmountCents = fees.BudgetCents,
+                    Status = EscrowStatus.Authorized
                 });
                 await db.SaveChangesAsync(cancellationToken);
             }
-            // If charge fails, job is still created but without escrow (customer can add card later)
+            // If auth fails, job is still created (customer can add/fix card later)
         }
 
         return Result<Guid>.Success(job.Id);

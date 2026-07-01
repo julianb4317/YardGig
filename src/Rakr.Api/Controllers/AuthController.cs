@@ -40,11 +40,9 @@ public class AuthController(IAuthService authService, ICurrentUserService curren
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new
-            {
-                error = ex.Message,
-                innerError = ex.InnerException?.Message,
-            });
+            var logger = HttpContext.RequestServices.GetRequiredService<ILogger<AuthController>>();
+            logger.LogError(ex, "Registration failed");
+            return StatusCode(500, new { errors = new[] { "Registration failed. Please try again." } });
         }
     }
 

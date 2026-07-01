@@ -95,6 +95,117 @@ public class StripePaymentService(
         }
     }
 
+    public async Task<ChargeResult> AuthorizePaymentAsync(
+        string stripeCustomerId, string paymentMethodId,
+        int amountCents, string currency, string idempotencyKey,
+        string? description = null, CancellationToken ct = default)
+    {
+        // Dev mode: simulate auth hold
+        if (paymentMethodId.StartsWith("pm_dev_") || stripeCustomerId.StartsWith("cus_dev_"))
+        {
+            logger.LogInformation("DEV MODE: Simulated auth hold of {Amount}¢ for {Customer}", amountCents, stripeCustomerId);
+            return new ChargeResult(true, $"pi_auth_dev_{Guid.NewGuid():N}");
+        }
+
+        StripeConfiguration.ApiKey = ApiKey;
+
+        var options = new PaymentIntentCreateOptions
+        {
+            Amount = amountCents,
+            Currency = currency,
+            Customer = stripeCustomerId,
+            PaymentMethod = paymentMethodId,
+            Confirm = true,
+            OffSession = true,
+            CaptureMethod = "manual",   // Auth only — hold funds, don't charge yet
+            Description = description,
+            StatementDescriptor = "Rakr",
+        };
+
+        try
+        {
+            var service = new PaymentIntentService();
+            var intent = await service.CreateAsync(options,
+                new RequestOptions { IdempotencyKey = idempotencyKey }, ct);
+
+            if (intent.Status == "requires_capture")
+            {
+                logger.LogInformation("Auth hold of {Amount}¢ placed on {CustomerId} (PI: {Id})",
+                    amountCents, stripeCustomerId, intent.Id);
+                return new ChargeResult(true, intent.Id);
+            }
+
+            logger.LogWarning("Auth not in expected state. Status: {Status}", intent.Status);
+            return new ChargeResult(false, intent.Id, $"Authorization status: {intent.Status}");
+        }
+        catch (StripeException ex)
+        {
+            logger.LogError(ex, "Stripe auth failed for customer {CustomerId}", stripeCustomerId);
+            return new ChargeResult(false, ErrorMessage: ex.Message);
+        }
+    }
+
+    public async Task<ChargeResult> CapturePaymentAsync(string paymentIntentId, int? amountCents = null, CancellationToken ct = default)
+    {
+        // Dev mode: simulate capture
+        if (paymentIntentId.StartsWith("pi_auth_dev_") || paymentIntentId.StartsWith("pi_dev_"))
+        {
+            logger.LogInformation("DEV MODE: Simulated capture of {PaymentIntentId} (amount: {Amount})", paymentIntentId, amountCents?.ToString() ?? "full");
+            return new ChargeResult(true, paymentIntentId);
+        }
+
+        StripeConfiguration.ApiKey = ApiKey;
+
+        try
+        {
+            var service = new PaymentIntentService();
+            var options = new PaymentIntentCaptureOptions();
+            if (amountCents.HasValue)
+            {
+                options.AmountToCapture = amountCents.Value;
+            }
+            var intent = await service.CaptureAsync(paymentIntentId, options, cancellationToken: ct);
+
+            if (intent.Status == "succeeded")
+            {
+                logger.LogInformation("Captured PI {Id} (amount: {Amount})", intent.Id, amountCents?.ToString() ?? "full");
+                return new ChargeResult(true, intent.Id);
+            }
+
+            return new ChargeResult(false, intent.Id, $"Capture status: {intent.Status}");
+        }
+        catch (StripeException ex)
+        {
+            logger.LogError(ex, "Stripe capture failed for PI {PaymentIntentId}", paymentIntentId);
+            return new ChargeResult(false, ErrorMessage: ex.Message);
+        }
+    }
+
+    public async Task<bool> ReleaseAuthorizationAsync(string paymentIntentId, CancellationToken ct = default)
+    {
+        // Dev mode: simulate release
+        if (paymentIntentId.StartsWith("pi_auth_dev_") || paymentIntentId.StartsWith("pi_dev_"))
+        {
+            logger.LogInformation("DEV MODE: Simulated auth release of {PaymentIntentId}", paymentIntentId);
+            return true;
+        }
+
+        StripeConfiguration.ApiKey = ApiKey;
+
+        try
+        {
+            var service = new PaymentIntentService();
+            await service.CancelAsync(paymentIntentId, cancellationToken: ct);
+            logger.LogInformation("Released auth hold on PI {Id}", paymentIntentId);
+            return true;
+        }
+        catch (StripeException ex)
+        {
+            logger.LogError(ex, "Failed to release auth for PI {PaymentIntentId}", paymentIntentId);
+            return false;
+        }
+    }
+
     // ─── Vendor Payouts ───
 
     public async Task<string> CreateTransferAsync(

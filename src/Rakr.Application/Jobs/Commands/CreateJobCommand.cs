@@ -15,5 +15,10 @@ public record CreateJobCommand(
     bool IsRecurring = false,
     string? RecurringFrequency = null,
     string[]? RecurringDays = null,
-    string? RecurringTime = null
+    string? RecurringTime = null,
+    string PricingType = "fixed",
+    int? HourlyRateCents = null,
+    decimal? EstimatedHours = null,
+    decimal? MaxHours = null,
+    string? JobDetailsJson = null
 ) : IRequest<Result<Guid>>;

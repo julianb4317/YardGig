@@ -14,10 +14,20 @@ public class JobRequest : AggregateRoot
     public Point Location { get; set; } = null!; // SRID 4326
     public JobStatus Status { get; set; } = JobStatus.Open;
     public int BudgetCents { get; set; }
+    public int? OriginalBudgetCents { get; set; } // Set when budget is changed from original
+
+    // Pricing mode
+    public string PricingType { get; set; } = "fixed"; // "fixed" or "hourly"
+    public int? HourlyRateCents { get; set; }
+    public decimal? EstimatedHours { get; set; }
+    public decimal? MaxHours { get; set; }
     public DateTime? ScheduleStart { get; set; }
     public DateTime? ScheduleEnd { get; set; }
     public List<string>? Photos { get; set; }
     public DateTime? ExpiresAt { get; set; }
+
+    // Category-specific details (stored as JSON)
+    public string? JobDetailsJson { get; set; }
 
     // Recurring schedule
     public bool IsRecurring { get; set; }

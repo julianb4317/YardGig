@@ -26,7 +26,7 @@ public class VendorPaymentsController(
             .Include(v => v.User)
             .FirstOrDefaultAsync(v => v.UserId == currentUser.UserId);
 
-        if (vendor is null) return NotFound("Vendor profile not found.");
+        if (vendor is null) return NotFound(new { errors = new[] { "Vendor profile not found." } });
 
         // If already onboarded, return dashboard link
         if (!string.IsNullOrEmpty(vendor.StripeAccountId))
@@ -98,7 +98,7 @@ public class VendorPaymentsController(
             .FirstOrDefaultAsync(v => v.UserId == currentUser.UserId);
 
         if (vendor is null || string.IsNullOrEmpty(vendor.StripeAccountId))
-            return BadRequest("Stripe account not set up.");
+            return BadRequest(new { errors = new[] { "Stripe account not set up." } });
 
         var url = await paymentService.CreateDashboardLinkAsync(vendor.StripeAccountId);
         return Ok(new { dashboardUrl = url });

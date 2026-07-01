@@ -84,7 +84,64 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
     public async Task<IActionResult> GetJobDetail(Guid id)
     {
         var result = await mediator.Send(new GetJobDetailQuery(id));
-        return result.Succeeded ? Ok(result.Data) : NotFound(result.Errors);
+        if (!result.Succeeded) return NotFound(new { errors = result.Errors });
+
+        // If the current user is a vendor, check if they already requested this job
+        bool? vendorHasRequested = null;
+        if (currentUser.UserId.HasValue)
+        {
+            var vendorProfile = await db.VendorProfiles
+                .AsNoTracking()
+                .FirstOrDefaultAsync(vp => vp.UserId == currentUser.UserId.Value);
+
+            if (vendorProfile != null)
+            {
+                vendorHasRequested = await db.VendorRequests
+                    .AsNoTracking()
+                    .AnyAsync(vr => vr.JobRequestId == id
+                        && vr.VendorProfileId == vendorProfile.Id
+                        && (vr.Status == Domain.Enums.VendorRequestStatus.Pending
+                            || vr.Status == Domain.Enums.VendorRequestStatus.Accepted));
+            }
+        }
+
+        // Return the DTO with the extra vendor field
+        return Ok(new
+        {
+            result.Data!.Id,
+            result.Data.Title,
+            result.Data.Description,
+            result.Data.Categories,
+            result.Data.Address,
+            result.Data.Latitude,
+            result.Data.Longitude,
+            result.Data.Status,
+            result.Data.BudgetCents,
+            result.Data.ScheduleStart,
+            result.Data.ScheduleEnd,
+            result.Data.Photos,
+            result.Data.CreatedAt,
+            result.Data.CustomerProfileId,
+            result.Data.PendingRequestCount,
+            result.Data.AssignedVendorName,
+            result.Data.AssignedVendorUserId,
+            result.Data.IsRecurring,
+            result.Data.RecurringFrequency,
+            result.Data.RecurringDays,
+            result.Data.RecurringTime,
+            result.Data.PricingType,
+            result.Data.HourlyRateCents,
+            result.Data.EstimatedHours,
+            result.Data.MaxHours,
+            result.Data.AssignmentStartedAt,
+            result.Data.AssignmentCompletedAt,
+            VendorHasRequested = vendorHasRequested,
+            OriginalBudgetCents = await db.JobRequests.AsNoTracking()
+                .Where(j => j.Id == id)
+                .Select(j => j.OriginalBudgetCents)
+                .FirstOrDefaultAsync(),
+            result.Data.JobDetailsJson
+        });
     }
 
     /// <summary>
@@ -130,24 +187,109 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
         }
         catch (Exception ex)
         {
-            // Walk the exception chain to find the real error
-            var inner = ex;
-            while (inner.InnerException != null) inner = inner.InnerException;
-            return StatusCode(500, new { error = ex.Message, rootCause = inner.Message });
+            var logger = HttpContext.RequestServices.GetRequiredService<ILogger<JobsController>>();
+            logger.LogError(ex, "Unhandled error in {Action}", nameof(CreateJob));
+            return StatusCode(500, new { errors = new[] { "An unexpected error occurred. Please try again." } });
         }
     }
 
     /// <summary>
-    /// Edit a job (title, description, categories, budget, photos).
-    /// Only allowed when status is Open or Requested.
+    /// Edit a job (title, description, categories, budget, schedule, photos).
+    /// Only allowed when status is Open. If budget changes, re-authorizes the payment hold.
     /// </summary>
     [HttpPut("{id:guid}")]
     [Authorize(Policy = "CustomerOnly")]
     public async Task<IActionResult> EditJob(Guid id, [FromBody] EditJobBody body)
     {
-        var command = new EditJobCommand(id, body.Title, body.Description, body.Categories, body.BudgetCents, body.Photos);
-        var result = await mediator.Send(command);
-        return result.Succeeded ? Ok() : BadRequest(result.Errors);
+        if (currentUser.UserId is null) return Unauthorized();
+
+        var job = await db.JobRequests
+            .Include(j => j.CustomerProfile)
+            .FirstOrDefaultAsync(j => j.Id == id);
+
+        if (job is null) return NotFound(new { errors = new[] { "Job not found." } });
+        if (job.CustomerProfile?.UserId != currentUser.UserId.Value)
+            return BadRequest(new { errors = new[] { "Only the job owner can edit." } });
+        if (job.Status != JobStatus.Open)
+            return BadRequest(new { errors = new[] { "Job can only be edited while in Open status." } });
+
+        var oldBudgetCents = job.BudgetCents;
+        var budgetChanged = body.BudgetCents.HasValue && body.BudgetCents.Value != oldBudgetCents;
+
+        // Apply edits
+        if (body.Title is not null) job.Title = body.Title;
+        if (body.Description is not null) job.Description = body.Description;
+        if (body.Categories is not null) job.Categories = body.Categories.ToList();
+        if (body.BudgetCents.HasValue)
+        {
+            // Track original budget on first change
+            if (job.OriginalBudgetCents is null && body.BudgetCents.Value != job.BudgetCents)
+                job.OriginalBudgetCents = job.BudgetCents;
+            job.BudgetCents = body.BudgetCents.Value;
+        }
+        if (body.ScheduleStart.HasValue) job.ScheduleStart = body.ScheduleStart.Value;
+        if (body.ScheduleEnd.HasValue) job.ScheduleEnd = body.ScheduleEnd.Value;
+        if (body.Photos is not null) job.Photos = body.Photos.ToList();
+        if (body.JobDetailsJson is not null) job.JobDetailsJson = body.JobDetailsJson;
+        job.UpdatedAt = DateTime.UtcNow;
+
+        // If budget changed, release old auth and create new one
+        if (budgetChanged)
+        {
+            var paymentSvc = HttpContext.RequestServices.GetRequiredService<IPaymentService>();
+            var commSvc = HttpContext.RequestServices.GetRequiredService<ICommissionService>();
+
+            // Release existing auth
+            var existingEscrow = await db.EscrowTransactions
+                .FirstOrDefaultAsync(e => e.JobRequestId == job.Id
+                    && (e.Status == Rakr.Domain.Entities.EscrowStatus.Authorized));
+            if (existingEscrow != null && !string.IsNullOrEmpty(existingEscrow.StripePaymentIntentId))
+            {
+                await paymentSvc.ReleaseAuthorizationAsync(existingEscrow.StripePaymentIntentId);
+                existingEscrow.Status = Rakr.Domain.Entities.EscrowStatus.Refunded;
+                existingEscrow.RefundedAt = DateTime.UtcNow;
+            }
+
+            // Create new auth for updated amount
+            var card = await db.CustomerPaymentMethods
+                .FirstOrDefaultAsync(pm => pm.CustomerProfileId == job.CustomerProfile!.Id && pm.IsDefault);
+
+            if (card != null)
+            {
+                var fees = await commSvc.CalculateFeesAsync(job.BudgetCents, Guid.Empty, job.Categories.ToArray());
+                var authResult = await paymentSvc.AuthorizePaymentAsync(
+                    card.StripeCustomerId, card.StripePaymentMethodId,
+                    fees.TotalChargeCents, "usd", $"auth_edit_{job.Id}_{Guid.NewGuid():N}",
+                    $"Rakr hold: {job.Title[..Math.Min(job.Title.Length, 25)]}");
+
+                if (authResult.Succeeded)
+                {
+                    db.EscrowTransactions.Add(new Domain.Entities.EscrowTransaction
+                    {
+                        JobRequestId = job.Id,
+                        CustomerProfileId = job.CustomerProfile!.Id,
+                        StripePaymentIntentId = authResult.PaymentIntentId,
+                        AmountCents = fees.TotalChargeCents,
+                        BudgetCents = fees.BudgetCents,
+                        TrustFeeCents = fees.TrustFeeCents,
+                        ProcessingFeeCents = fees.ProcessingFeeCents,
+                        PlatformFeeCents = fees.TrustFeeCents,
+                        VendorAmountCents = fees.BudgetCents,
+                        Status = Rakr.Domain.Entities.EscrowStatus.Authorized
+                    });
+                }
+            }
+        }
+
+        await db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            success = true,
+            budgetChanged,
+            oldBudgetCents = budgetChanged ? oldBudgetCents : (int?)null,
+            newBudgetCents = budgetChanged ? job.BudgetCents : (int?)null
+        });
     }
 
     /// <summary>
@@ -160,7 +302,7 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
         var command = new RequestJobCommand(id, body.ProposedPriceCents, body.Note);
         var result = await mediator.Send(command);
         if (!result.Succeeded)
-            return BadRequest(result.Errors);
+            return BadRequest(new { errors = result.Errors });
 
         // Notify customer about the new request
         var vendorProfile = await db.VendorProfiles.FirstOrDefaultAsync(v => v.UserId == currentUser.UserId);
@@ -200,64 +342,64 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
                 // If caller hasn't confirmed the higher price, return the price info so frontend can show confirmation
                 if (!body.ConfirmedPriceCents.HasValue || body.ConfirmedPriceCents.Value != effectivePriceCents)
                 {
+                    var commSvc = HttpContext.RequestServices.GetRequiredService<ICommissionService>();
+                    var previewFees = await commSvc.CalculateFeesAsync(effectivePriceCents, Guid.Empty, job.Categories.ToArray());
                     return Ok(new
                     {
                         requiresPriceConfirmation = true,
                         originalBudgetCents = job.BudgetCents,
                         vendorPriceCents = effectivePriceCents,
-                        differenceCents = effectivePriceCents - job.BudgetCents
+                        differenceCents = effectivePriceCents - job.BudgetCents,
+                        newTotalChargeCents = previewFees.TotalChargeCents,
+                        newTrustFeeCents = previewFees.TrustFeeCents,
+                        newProcessingFeeCents = previewFees.ProcessingFeeCents
                     });
                 }
 
-                // Charge the difference
-                var paymentService = HttpContext.RequestServices.GetRequiredService<IPaymentService>();
-                var commissionService = HttpContext.RequestServices.GetRequiredService<ICommissionService>();
+                // Price difference confirmed — release old auth and create new one for the full new amount
+                var paymentSvc = HttpContext.RequestServices.GetRequiredService<IPaymentService>();
 
+                // Release old authorization
+                var oldEscrow = await db.EscrowTransactions
+                    .FirstOrDefaultAsync(e => e.JobRequestId == job.Id
+                        && (e.Status == Rakr.Domain.Entities.EscrowStatus.Authorized || e.Status == Rakr.Domain.Entities.EscrowStatus.Held));
+                if (oldEscrow != null && !string.IsNullOrEmpty(oldEscrow.StripePaymentIntentId))
+                {
+                    await paymentSvc.ReleaseAuthorizationAsync(oldEscrow.StripePaymentIntentId);
+                    oldEscrow.Status = Rakr.Domain.Entities.EscrowStatus.Refunded;
+                    oldEscrow.RefundedAt = DateTime.UtcNow;
+                }
+
+                // Create new auth for the higher amount
                 var card = await db.CustomerPaymentMethods
                     .FirstOrDefaultAsync(pm => pm.CustomerProfileId == job.CustomerProfile!.Id && pm.IsDefault);
-
                 if (card is null)
                     return BadRequest(new { errors = new[] { "No payment method on file. Please add a card in Settings." } });
 
-                var differenceCents = effectivePriceCents - job.BudgetCents;
-
-                var chargeResult = await paymentService.ChargeCustomerAsync(
+                var commSvc2 = HttpContext.RequestServices.GetRequiredService<ICommissionService>();
+                var newFees = await commSvc2.CalculateFeesAsync(effectivePriceCents, Guid.Empty, job.Categories.ToArray());
+                var authResult = await paymentSvc.AuthorizePaymentAsync(
                     card.StripeCustomerId, card.StripePaymentMethodId,
-                    differenceCents, "usd", $"escrow_topup_{job.Id}",
-                    $"Rakr escrow top-up: {job.Title[..Math.Min(job.Title.Length, 25)]}");
+                    newFees.TotalChargeCents, "usd", $"auth_upgrade_{job.Id}_{Guid.NewGuid():N}",
+                    $"Rakr hold: {job.Title[..Math.Min(job.Title.Length, 25)]}");
 
-                if (!chargeResult.Succeeded)
-                    return BadRequest(new { errors = new[] { "Failed to charge the price difference. Please check your payment method." } });
+                if (!authResult.Succeeded)
+                    return BadRequest(new { errors = new[] { "Failed to authorize the new amount. Please check your payment method." } });
 
-                // Update the existing escrow or create a new top-up entry
-                var existingEscrow = await db.EscrowTransactions
-                    .FirstOrDefaultAsync(e => e.JobRequestId == job.Id && e.Status == Rakr.Domain.Entities.EscrowStatus.Held);
-
-                if (existingEscrow is not null)
+                // Create new escrow entry
+                db.EscrowTransactions.Add(new Domain.Entities.EscrowTransaction
                 {
-                    // Update the escrow totals
-                    var fees = await commissionService.CalculateFeesAsync(
-                        effectivePriceCents, Guid.Empty, job.Categories.ToArray());
-                    existingEscrow.AmountCents = fees.GrossAmountCents;
-                    existingEscrow.PlatformFeeCents = fees.PlatformFeeCents;
-                    existingEscrow.VendorAmountCents = fees.VendorNetCents;
-                }
-                else
-                {
-                    // Create new escrow entry for the full amount
-                    var fees = await commissionService.CalculateFeesAsync(
-                        effectivePriceCents, Guid.Empty, job.Categories.ToArray());
-                    db.EscrowTransactions.Add(new Domain.Entities.EscrowTransaction
-                    {
-                        JobRequestId = job.Id,
-                        CustomerProfileId = job.CustomerProfile!.Id,
-                        StripePaymentIntentId = chargeResult.PaymentIntentId,
-                        AmountCents = fees.GrossAmountCents,
-                        PlatformFeeCents = fees.PlatformFeeCents,
-                        VendorAmountCents = fees.VendorNetCents,
-                        Status = Rakr.Domain.Entities.EscrowStatus.Held
-                    });
-                }
+                    JobRequestId = job.Id,
+                    CustomerProfileId = job.CustomerProfile!.Id,
+                    StripePaymentIntentId = authResult.PaymentIntentId,
+                    AmountCents = newFees.TotalChargeCents,
+                    BudgetCents = newFees.BudgetCents,
+                    TrustFeeCents = newFees.TrustFeeCents,
+                    ProcessingFeeCents = newFees.ProcessingFeeCents,
+                    PlatformFeeCents = newFees.TrustFeeCents,
+                    VendorAmountCents = newFees.BudgetCents,
+                    Status = Rakr.Domain.Entities.EscrowStatus.Authorized
+                });
 
                 // Update the job's budget to the new effective price
                 job.BudgetCents = effectivePriceCents;
@@ -270,6 +412,21 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
             var result = await mediator.Send(command);
             if (result.Succeeded)
             {
+                // CAPTURE the authorization hold — now the card is officially charged
+                var capturePaymentSvc = HttpContext.RequestServices.GetRequiredService<IPaymentService>();
+                var escrowToCapture = await db.EscrowTransactions
+                    .FirstOrDefaultAsync(e => e.JobRequestId == id && e.Status == Rakr.Domain.Entities.EscrowStatus.Authorized);
+                if (escrowToCapture != null && !string.IsNullOrEmpty(escrowToCapture.StripePaymentIntentId))
+                {
+                    var captureResult = await capturePaymentSvc.CapturePaymentAsync(escrowToCapture.StripePaymentIntentId);
+                    if (captureResult.Succeeded)
+                    {
+                        escrowToCapture.Status = Rakr.Domain.Entities.EscrowStatus.Held;
+                        escrowToCapture.CapturedAt = DateTime.UtcNow;
+                        await db.SaveChangesAsync();
+                    }
+                }
+
                 // Notify the assigned vendor
                 try { await jobNotifications.NotifyJobAssigned(id, vendorReq.VendorProfileId); } catch { /* notification non-fatal */ }
 
@@ -291,8 +448,9 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
         }
         catch (Exception ex)
         {
-            var inner = ex; while (inner.InnerException != null) inner = inner.InnerException;
-            return StatusCode(500, new { error = ex.Message, rootCause = inner.Message });
+            var logger = HttpContext.RequestServices.GetRequiredService<ILogger<JobsController>>();
+            logger.LogError(ex, "Unhandled error in {Action}", nameof(AssignVendor));
+            return StatusCode(500, new { errors = new[] { "An unexpected error occurred. Please try again." } });
         }
     }
 
@@ -333,8 +491,9 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
         }
         catch (Exception ex)
         {
-            var inner = ex; while (inner.InnerException != null) inner = inner.InnerException;
-            return StatusCode(500, new { error = ex.Message, rootCause = inner.Message });
+            var logger = HttpContext.RequestServices.GetRequiredService<ILogger<JobsController>>();
+            logger.LogError(ex, "Unhandled error in {Action}", nameof(UpdateStatus));
+            return StatusCode(500, new { errors = new[] { "An unexpected error occurred. Please try again." } });
         }
     }
 
@@ -362,7 +521,7 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
         var command = new CancelJobCommand(id, body?.Reason);
         var result = await mediator.Send(command);
         if (!result.Succeeded)
-            return BadRequest(result.Errors);
+            return BadRequest(new { errors = result.Errors });
 
         // Notify all affected vendors
         foreach (var vendorUserId in vendorUserIds.Distinct())
@@ -388,7 +547,7 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
                 try { await jobNotifications.NotifyJobRescheduled(id, job.Assignment.VendorProfile.UserId, job.Title); } catch { /* notification non-fatal */ }
             return Ok(new { message = "Schedule updated." });
         }
-        return BadRequest(result.Errors);
+        return BadRequest(new { errors = result.Errors });
     }
 
     /// <summary>
@@ -399,7 +558,7 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
     public async Task<IActionResult> GetJobRequests(Guid id)
     {
         var result = await mediator.Send(new GetJobRequestsQuery(id));
-        return result.Succeeded ? Ok(result.Data) : BadRequest(result.Errors);
+        return result.Succeeded ? Ok(result.Data) : BadRequest(new { errors = result.Errors });
     }
 
     /// <summary>
@@ -419,7 +578,7 @@ public class JobsController(IMediator mediator, IAppDbContext db, ICurrentUserSe
                 try { await jobNotifications.NotifyVendorWithdrew(id, job.CustomerProfile.UserId, job.Title); } catch { /* notification non-fatal */ }
             return Ok(new { message = "Request withdrawn." });
         }
-        return BadRequest(result.Errors);
+        return BadRequest(new { errors = result.Errors });
     }
 
     /// <summary>
@@ -520,4 +679,4 @@ public record AssignVendorBody(Guid VendorRequestId, int? ConfirmedPriceCents = 
 public record UpdateStatusBody(string Status, string[]? CompletionPhotos = null);
 public record CancelJobBody(string? Reason);
 public record RescheduleJobBody(DateTime ScheduleStart, DateTime ScheduleEnd);
-public record EditJobBody(string? Title, string? Description, string[]? Categories, int? BudgetCents, string[]? Photos);
+public record EditJobBody(string? Title, string? Description, string[]? Categories, int? BudgetCents, string[]? Photos, DateTime? ScheduleStart = null, DateTime? ScheduleEnd = null, string? JobDetailsJson = null);

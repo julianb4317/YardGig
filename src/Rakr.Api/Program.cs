@@ -82,7 +82,10 @@ if (!string.IsNullOrEmpty(googleClientId))
 builder.Services.AddHttpContextAccessor();
 
 // Controllers & Swagger
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<Rakr.Api.Filters.GlobalExceptionFilter>();
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 

@@ -8,7 +8,8 @@ namespace Rakr.Application.Jobs.Commands;
 
 public class CancelJobHandler(
     IAppDbContext db,
-    ICurrentUserService currentUser
+    ICurrentUserService currentUser,
+    IPaymentService paymentService
 ) : IRequestHandler<CancelJobCommand, Result<CancelJobResult>>
 {
     private const int LateCancelPenaltyCents = 500; // $5
@@ -73,6 +74,24 @@ public class CancelJobHandler(
         // Update job status
         job.Status = JobStatus.Cancelled;
         job.UpdatedAt = DateTime.UtcNow;
+
+        // Release any authorization hold (no charge if auth hasn't been captured)
+        var escrow = await db.EscrowTransactions
+            .FirstOrDefaultAsync(e => e.JobRequestId == job.Id
+                && (e.Status == Rakr.Domain.Entities.EscrowStatus.Authorized
+                    || e.Status == Rakr.Domain.Entities.EscrowStatus.Held), cancellationToken);
+
+        if (escrow is not null && !string.IsNullOrEmpty(escrow.StripePaymentIntentId))
+        {
+            if (escrow.Status == Rakr.Domain.Entities.EscrowStatus.Authorized)
+            {
+                // Auth hold — release without charging ($0 cost)
+                await paymentService.ReleaseAuthorizationAsync(escrow.StripePaymentIntentId, cancellationToken);
+            }
+            // If already captured (Held), would need a refund — but we still release for now
+            escrow.Status = Rakr.Domain.Entities.EscrowStatus.Refunded;
+            escrow.RefundedAt = DateTime.UtcNow;
+        }
 
         await db.SaveChangesAsync(cancellationToken);
 

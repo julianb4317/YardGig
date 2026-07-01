@@ -35,7 +35,7 @@ public class WebhooksController(
         catch (StripeException ex)
         {
             logger.LogWarning("Stripe webhook signature verification failed: {Message}", ex.Message);
-            return BadRequest("Invalid signature.");
+            return BadRequest(new { errors = new[] { "Invalid signature." } });
         }
 
         // Idempotency check

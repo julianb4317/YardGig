@@ -21,6 +21,18 @@ public interface IPaymentService
         int amountCents, string currency, string idempotencyKey,
         string? description = null, CancellationToken ct = default);
 
+    /// <summary>Place a pre-authorization hold on a customer's card (no charge yet). Use CapturePaymentAsync to charge later.</summary>
+    Task<ChargeResult> AuthorizePaymentAsync(
+        string stripeCustomerId, string paymentMethodId,
+        int amountCents, string currency, string idempotencyKey,
+        string? description = null, CancellationToken ct = default);
+
+    /// <summary>Capture a previously authorized payment intent (converts hold to charge). Pass amountCents for partial capture.</summary>
+    Task<ChargeResult> CapturePaymentAsync(string paymentIntentId, int? amountCents = null, CancellationToken ct = default);
+
+    /// <summary>Release (cancel) a previously authorized payment intent without charging.</summary>
+    Task<bool> ReleaseAuthorizationAsync(string paymentIntentId, CancellationToken ct = default);
+
     // ── Vendor Payouts (platform balance → vendor bank via connected account) ──
 
     /// <summary>Transfer funds from platform balance to a vendor's connected account.</summary>

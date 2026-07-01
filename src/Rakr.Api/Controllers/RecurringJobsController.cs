@@ -130,7 +130,7 @@ public class RecurringJobsController(IAppDbContext db, ICurrentUserService curre
         if (series is null) return NotFound();
 
         if (series.Status != RecurringSeriesStatus.Active)
-            return BadRequest(new { error = "Only active series can be paused." });
+            return BadRequest(new { errors = new[] { "Only active series can be paused." } });
 
         series.Status = RecurringSeriesStatus.Paused;
         await db.SaveChangesAsync();
@@ -149,7 +149,7 @@ public class RecurringJobsController(IAppDbContext db, ICurrentUserService curre
         if (series is null) return NotFound();
 
         if (series.Status != RecurringSeriesStatus.Paused && series.Status != RecurringSeriesStatus.PaymentRequired)
-            return BadRequest(new { error = "Only paused or payment-required series can be resumed." });
+            return BadRequest(new { errors = new[] { "Only paused or payment-required series can be resumed." } });
 
         // If resuming from PaymentRequired, verify card exists
         if (series.Status == RecurringSeriesStatus.PaymentRequired)
@@ -157,7 +157,7 @@ public class RecurringJobsController(IAppDbContext db, ICurrentUserService curre
             var card = await db.CustomerPaymentMethods
                 .FirstOrDefaultAsync(pm => pm.CustomerProfileId == series.CustomerProfileId && pm.IsDefault);
             if (card is null)
-                return BadRequest(new { error = "Add a payment method before resuming." });
+                return BadRequest(new { errors = new[] { "Add a payment method before resuming." } });
         }
 
         series.Status = RecurringSeriesStatus.Active;
@@ -179,7 +179,7 @@ public class RecurringJobsController(IAppDbContext db, ICurrentUserService curre
         if (series is null) return NotFound();
 
         if (series.Status == RecurringSeriesStatus.Cancelled)
-            return BadRequest(new { error = "Series is already cancelled." });
+            return BadRequest(new { errors = new[] { "Series is already cancelled." } });
 
         series.Status = RecurringSeriesStatus.Cancelled;
         series.NextOccurrence = null;

@@ -4,19 +4,24 @@ namespace Rakr.Domain.Entities;
 
 /// <summary>
 /// Tracks funds held in escrow for a job.
-/// Created when job is posted (customer charged).
-/// Released when customer verifies completion.
+/// Created when job is posted (auth hold placed on customer card).
+/// Captured when vendor is assigned.
+/// Released to vendor when customer verifies completion.
 /// </summary>
 public class EscrowTransaction : BaseEntity
 {
     public Guid JobRequestId { get; set; }
     public Guid CustomerProfileId { get; set; }
     public string? StripePaymentIntentId { get; set; }
-    public int AmountCents { get; set; }           // Total charged to customer
-    public int PlatformFeeCents { get; set; }      // Platform keeps on release
-    public int VendorAmountCents { get; set; }     // Vendor gets on release
+    public int AmountCents { get; set; }           // Total charged/held (budget + fees)
+    public int BudgetCents { get; set; }           // Job budget (what vendor receives)
+    public int TrustFeeCents { get; set; }         // 10% trust & escrow fee (platform revenue)
+    public int ProcessingFeeCents { get; set; }    // 2.9% + $0.30 (goes to Stripe)
+    public int PlatformFeeCents { get; set; }      // = TrustFeeCents (kept for backwards compat)
+    public int VendorAmountCents { get; set; }     // = BudgetCents (vendor gets full budget)
     public string Currency { get; set; } = "usd";
-    public EscrowStatus Status { get; set; } = EscrowStatus.Held;
+    public EscrowStatus Status { get; set; } = EscrowStatus.Authorized;
+    public DateTime? CapturedAt { get; set; }
     public DateTime? ReleasedAt { get; set; }
     public DateTime? RefundedAt { get; set; }
 
@@ -26,7 +31,8 @@ public class EscrowTransaction : BaseEntity
 
 public enum EscrowStatus
 {
-    Held,       // Funds charged and held
+    Authorized, // Auth hold placed, not yet captured
+    Held,       // Funds captured and held (vendor assigned)
     Released,   // Released to vendor on verification
-    Refunded    // Returned to customer (cancellation/dispute)
+    Refunded    // Authorization released / refunded to customer
 }
