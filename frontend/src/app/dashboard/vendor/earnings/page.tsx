@@ -16,19 +16,23 @@ interface VendorBalance {
   lastPayoutAt: string | null;
 }
 
-interface VendorMyRequest {
-  vendorRequestId: string;
-  jobId: string;
+interface VendorEarning {
+  id: string;
+  jobRequestId: string;
   jobTitle: string;
-  budgetCents: number;
-  status: string;
-  jobStatus: string;
-  proposedPriceCents: number | null;
   pricingType: string;
   hourlyRateCents: number | null;
-  estimatedHours: number | null;
-  maxHours: number | null;
+  vendorEarnedCents: number;
+  amountCents: number;
+  capturedAt: string | null;
   createdAt: string;
+}
+
+interface VendorEarningsResponse {
+  earnings: VendorEarning[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
 }
 
 export default function VendorEarningsPage() {
@@ -37,25 +41,13 @@ export default function VendorEarningsPage() {
     queryFn: () => apiClient<VendorBalance>("/api/payments/vendor/balance"),
   });
 
-  const { data: requests } = useQuery({
-    queryKey: ["vendorMyRequests"],
-    queryFn: () => apiClient<VendorMyRequest[]>("/api/jobs/vendor/my-requests"),
+  const { data: earningsData } = useQuery({
+    queryKey: ["vendorEarnings"],
+    queryFn: () => apiClient<VendorEarningsResponse>("/api/payments/vendor/earnings?pageSize=50"),
   });
 
-  // Calculate category breakdown from completed jobs
-  const completedJobs = requests?.filter((r) => r.status === "Accepted" && ["Paid", "Completed", "Closed"].includes(r.jobStatus)) ?? [];
-  const totalEarnedFromJobs = completedJobs.reduce((sum, j) => sum + j.budgetCents, 0); // Vendor gets 100% of budget
-
-  // Group earnings by job for breakdown
-  const jobBreakdown = completedJobs.map((j) => ({
-    title: j.jobTitle,
-    budgetCents: j.budgetCents,
-    earnedCents: j.budgetCents, // Vendor gets full budget (fees charged to customer separately)
-    pricingType: j.pricingType ?? "fixed",
-    hourlyRateCents: j.hourlyRateCents,
-    estimatedHours: j.estimatedHours,
-    date: j.createdAt,
-  }));
+  const earnings = earningsData?.earnings ?? [];
+  const totalEarned = earnings.reduce((sum, e) => sum + e.vendorEarnedCents, 0);
 
   if (balanceLoading) return <PageLoader />;
 
@@ -124,7 +116,7 @@ export default function VendorEarningsPage() {
             <div className="mt-8">
               <h2 className="text-lg font-semibold text-gray-900">Completed Jobs</h2>
 
-              {jobBreakdown.length === 0 ? (
+              {earnings.length === 0 ? (
                 <EmptyState
                   title="No completed jobs yet"
                   message="Complete your first job and get verified by the customer to see earnings here."
@@ -141,28 +133,30 @@ export default function VendorEarningsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {jobBreakdown.map((job, i) => (
-                        <tr key={i} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 font-medium text-gray-900">{job.title}</td>
+                      {earnings.map((item) => (
+                        <tr key={item.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-3 font-medium text-gray-900">{item.jobTitle}</td>
                           <td className="px-4 py-3 text-gray-500">
-                            {job.pricingType === "hourly" ? (
+                            {item.pricingType === "hourly" ? (
                               <span className="text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded px-1.5 py-0.5">
-                                ⏱ {formatCents(job.hourlyRateCents ?? 0)}/hr
+                                ⏱ {formatCents(item.hourlyRateCents ?? 0)}/hr
                               </span>
                             ) : (
                               <span className="text-xs text-gray-500">Fixed</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-right font-medium text-emerald-600">{formatCents(job.earnedCents)}</td>
-                          <td className="px-4 py-3 text-right text-gray-400">{new Date(job.date).toLocaleDateString()}</td>
+                          <td className="px-4 py-3 text-right font-medium text-emerald-600">{formatCents(item.vendorEarnedCents)}</td>
+                          <td className="px-4 py-3 text-right text-gray-400">
+                            {item.capturedAt ? new Date(item.capturedAt).toLocaleDateString() : new Date(item.createdAt).toLocaleDateString()}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot className="bg-gray-50 border-t">
                       <tr>
-                        <td className="px-4 py-3 font-semibold text-gray-900" colSpan={2}>Total ({completedJobs.length} jobs)</td>
+                        <td className="px-4 py-3 font-semibold text-gray-900" colSpan={2}>Total ({earnings.length} jobs)</td>
                         <td className="px-4 py-3 text-right font-bold text-emerald-600">
-                          {formatCents(totalEarnedFromJobs)}
+                          {formatCents(totalEarned)}
                         </td>
                         <td></td>
                       </tr>

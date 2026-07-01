@@ -510,6 +510,52 @@ public class PaymentsController(
         return Ok(new { payouts, totalCount, page, pageSize });
     }
 
+    /// <summary>
+    /// Get actual earnings breakdown for the current vendor (from payment transactions).
+    /// </summary>
+    [HttpGet("vendor/earnings")]
+    [Authorize(Policy = "VendorOnly")]
+    public async Task<IActionResult> GetVendorEarnings([FromQuery] int page = 1, [FromQuery] int pageSize = 50)
+    {
+        if (currentUser.UserId is null) return Unauthorized();
+
+        var vendorProfile = await db.VendorProfiles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(vp => vp.UserId == currentUser.UserId.Value);
+
+        if (vendorProfile is null)
+            return Ok(new { earnings = Array.Empty<object>(), totalCount = 0, page, pageSize });
+
+        var query = db.PaymentTransactions
+            .AsNoTracking()
+            .Include(pt => pt.JobRequest)
+            .Where(pt => pt.Status == PaymentStatus.Captured
+                && pt.JobRequest.Assignment != null
+                && pt.JobRequest.Assignment.VendorProfileId == vendorProfile.Id);
+
+        var totalCount = await query.CountAsync();
+
+        var earnings = await query
+            .OrderByDescending(pt => pt.CapturedAt ?? pt.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(pt => new
+            {
+                pt.Id,
+                pt.JobRequestId,
+                JobTitle = pt.JobRequest.Title,
+                PricingType = pt.JobRequest.PricingType,
+                HourlyRateCents = pt.JobRequest.HourlyRateCents,
+                pt.VendorEarnedCents,
+                pt.AmountCents,
+                pt.CapturedAt,
+                pt.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(new { earnings, totalCount, page, pageSize });
+    }
+
     // ─────────────── PAYMENT STATUS ───────────────
 
     /// <summary>

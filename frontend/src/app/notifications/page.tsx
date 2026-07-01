@@ -45,7 +45,7 @@ function NotificationRow({ item, onMarkRead }: { item: NotificationItem; onMarkR
         <p className="mt-1 text-xs text-gray-400">
           {timeAgo}
           {" · "}
-          {new Date(item.createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+          {new Date(item.createdAt.endsWith("Z") ? item.createdAt : item.createdAt + "Z").toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
         </p>
       </div>
 
@@ -64,7 +64,9 @@ function NotificationRow({ item, onMarkRead }: { item: NotificationItem; onMarkR
 }
 
 function getTimeAgo(dateStr: string): string {
-  const date = new Date(dateStr);
+  // Ensure UTC interpretation — backend sends UTC but may not include Z suffix
+  const utcStr = dateStr.endsWith("Z") ? dateStr : dateStr + "Z";
+  const date = new Date(utcStr);
   const diff = Date.now() - date.getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "Just now";

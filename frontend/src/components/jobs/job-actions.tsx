@@ -126,7 +126,12 @@ export function JobActions({ job }: JobActionsProps) {
               <Eye className="h-5 w-5 text-green-600 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-green-800">Work completed — verify to release payment</p>
-                <p className="mt-1 text-xs text-green-600">Review the vendor's completion photos. Your payment was held in escrow when you posted this job. Verifying will release funds to the vendor.</p>
+                <p className="mt-1 text-xs text-green-600">
+                  Review the vendor's completion photos and verify the work. Your card will be charged and payment released to the vendor.
+                </p>
+                <p className="mt-1 text-xs text-amber-600 font-medium">
+                  ⏰ Payment will be automatically released in 48 hours if not manually verified.
+                </p>
               </div>
             </div>
           </div>

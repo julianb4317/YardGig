@@ -126,6 +126,112 @@ public class RecurringJobSpawner(IServiceScopeFactory scopeFactory, ILogger<Recu
             }
         }
 
+        // 4. Auto-release payment for jobs completed more than 48 hours ago without customer verification
+        var overdueCompletedJobs = await db.JobRequests
+            .Include(j => j.Assignment).ThenInclude(a => a!.VendorProfile)
+            .Include(j => j.CustomerProfile)
+            .Where(j => j.Status == JobStatus.Completed
+                && j.Assignment != null
+                && j.Assignment.CompletedAt != null
+                && j.Assignment.CompletedAt.Value < now.AddHours(-48))
+            .ToListAsync(ct);
+
+        foreach (var job in overdueCompletedJobs)
+        {
+            try
+            {
+                // Find the escrow
+                var escrow = await db.EscrowTransactions
+                    .FirstOrDefaultAsync(e => e.JobRequestId == job.Id
+                        && (e.Status == Rakr.Domain.Entities.EscrowStatus.Authorized
+                            || e.Status == Rakr.Domain.Entities.EscrowStatus.Held), ct);
+
+                if (escrow == null || string.IsNullOrEmpty(escrow.StripePaymentIntentId)) continue;
+
+                // For hourly jobs, calculate actual amount based on elapsed time
+                int actualVendorCents = escrow.VendorAmountCents;
+                int captureAmountCents = escrow.AmountCents;
+
+                if (job.PricingType == "hourly" && job.HourlyRateCents.HasValue && job.Assignment!.StartedAt.HasValue)
+                {
+                    var elapsedHours = (decimal)(job.Assignment.CompletedAt!.Value - job.Assignment.StartedAt.Value).TotalHours;
+                    var cappedHours = job.MaxHours.HasValue ? Math.Min(elapsedHours, job.MaxHours.Value) : elapsedHours;
+                    actualVendorCents = (int)Math.Ceiling((double)cappedHours * (double)job.HourlyRateCents.Value);
+
+                    // Recalculate fees on actual amount
+                    var fees = await commissionService.CalculateFeesAsync(actualVendorCents, Guid.Empty, job.Categories.ToArray(), ct);
+                    captureAmountCents = fees.TotalChargeCents;
+                    actualVendorCents = fees.BudgetCents;
+                }
+
+                // Capture — partial for hourly, full for fixed
+                if (escrow.Status == Rakr.Domain.Entities.EscrowStatus.Authorized)
+                {
+                    var captureResult = await paymentService.CapturePaymentAsync(
+                        escrow.StripePaymentIntentId,
+                        job.PricingType == "hourly" ? captureAmountCents : null,
+                        ct);
+                    if (!captureResult.Succeeded) continue;
+                }
+
+                // Release escrow
+                escrow.Status = Rakr.Domain.Entities.EscrowStatus.Released;
+                escrow.ReleasedAt = DateTime.UtcNow;
+                escrow.CapturedAt ??= DateTime.UtcNow;
+                escrow.VendorAmountCents = actualVendorCents;
+
+                // Credit vendor balance
+                var vendorProfile = job.Assignment!.VendorProfile;
+                var vendorBalance = await db.VendorBalances
+                    .FirstOrDefaultAsync(vb => vb.VendorProfileId == vendorProfile.Id, ct);
+                if (vendorBalance is null)
+                {
+                    vendorBalance = new VendorBalance { VendorProfileId = vendorProfile.Id };
+                    db.VendorBalances.Add(vendorBalance);
+                }
+                vendorBalance.AvailableBalanceCents += actualVendorCents;
+                vendorBalance.LifetimeEarnedCents += actualVendorCents;
+                vendorBalance.UpdatedAt = DateTime.UtcNow;
+
+                // Update job status
+                job.Status = JobStatus.Paid;
+                job.UpdatedAt = DateTime.UtcNow;
+                job.Assignment.ConfirmedAt = DateTime.UtcNow;
+                vendorProfile.TotalJobsCompleted += 1;
+
+                // Create payment transaction record
+                db.PaymentTransactions.Add(new PaymentTransaction
+                {
+                    JobRequestId = job.Id,
+                    StripePaymentIntentId = escrow.StripePaymentIntentId,
+                    AmountCents = captureAmountCents,
+                    PlatformFeeCents = escrow.PlatformFeeCents,
+                    VendorEarnedCents = actualVendorCents,
+                    Status = PaymentStatus.Captured,
+                    CapturedAt = DateTime.UtcNow
+                });
+
+                // Notify both parties
+                await notifications.SendInAppNotificationAsync(
+                    job.CustomerProfile.UserId, "payment_auto_released",
+                    "Payment automatically released",
+                    $"Payment for \"{job.Title}\" was automatically released after 48 hours. The vendor has been paid.",
+                    new { jobId = job.Id }, ct);
+
+                await notifications.SendInAppNotificationAsync(
+                    vendorProfile.UserId, "payment_released",
+                    $"Payment received: ${escrow.VendorAmountCents / 100.0:F2}",
+                    $"Payment for \"{job.Title}\" was automatically released to your balance.",
+                    new { jobId = job.Id }, ct);
+
+                logger.LogInformation("Auto-released payment for job {JobId} after 48h", job.Id);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to auto-release payment for job {JobId}", job.Id);
+            }
+        }
+
         await db.SaveChangesAsync(ct);
     }
 

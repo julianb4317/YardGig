@@ -151,7 +151,7 @@ export function PaymentButton({
       <ConfirmDialog
         open={confirmOpen}
         title="Verify & Charge Card"
-        description={`You are confirming the work is complete. Your card will now be charged ${formatCents(budgetCents)} (plus fees) and the funds will be released to the vendor. This action is final.`}
+        description={`You are confirming the work is complete. Your card will now be charged ${formatCents(budgetCents)} (plus fees) and the funds will be released to the vendor. This action is final. Note: If you do not verify within 48 hours of completion, payment is automatically released.`}
         confirmLabel={chargeMutation.isPending ? "Processing..." : "Confirm & Charge Card"}
         isPending={chargeMutation.isPending}
         onConfirm={() => chargeMutation.mutate()}
@@ -165,6 +165,9 @@ export function PaymentButton({
             <h3 className="text-lg font-semibold">Review & Approve Hours</h3>
             <p className="mt-1 text-sm text-gray-500">
               Your card has NOT been charged yet — only a hold was placed. By approving, your card will be charged for the actual hours below.
+            </p>
+            <p className="mt-1 text-xs text-amber-600 font-medium">
+              ⏰ If not verified within 48 hours, payment is automatically released for the full elapsed time (capped at max hours).
             </p>
 
             <div className="mt-4 space-y-3 text-sm">
