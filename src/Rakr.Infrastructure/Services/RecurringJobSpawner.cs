@@ -167,6 +167,11 @@ public class RecurringJobSpawner(IServiceScopeFactory scopeFactory, ILogger<Recu
             Location = template.Location,
             Status = series.AssignedVendorProfileId.HasValue ? JobStatus.Assigned : JobStatus.Open,
             BudgetCents = template.BudgetCents,
+            PricingType = template.PricingType,
+            HourlyRateCents = template.HourlyRateCents,
+            EstimatedHours = template.EstimatedHours,
+            MaxHours = template.MaxHours,
+            JobDetailsJson = template.JobDetailsJson,
             ScheduleStart = series.NextOccurrence,
             ScheduleEnd = series.NextOccurrence?.AddHours(4), // 4-hour window
             IsRecurring = true,
@@ -200,41 +205,80 @@ public class RecurringJobSpawner(IServiceScopeFactory scopeFactory, ILogger<Recu
             await db.SaveChangesAsync(ct);
         }
 
-        // Charge escrow
+        // Payment: For fixed-price recurring, charge immediately (vendor already assigned).
+        // For hourly recurring, place auth hold (will be partial-captured on verification).
         var fees = await commissionService.CalculateFeesAsync(
             template.BudgetCents, Guid.Empty, template.Categories.ToArray(), ct);
 
-        var chargeResult = await paymentService.ChargeCustomerAsync(
-            card.StripeCustomerId, card.StripePaymentMethodId,
-            fees.TotalChargeCents, "usd", $"escrow_{childJob.Id}",
-            $"Rakr recurring: {template.Title[..Math.Min(template.Title.Length, 25)]}", ct);
-
-        if (chargeResult.Succeeded)
+        if (template.PricingType == "hourly")
         {
-            db.EscrowTransactions.Add(new EscrowTransaction
+            // Hourly: auth hold only — partial capture at verification
+            var authResult = await paymentService.AuthorizePaymentAsync(
+                card.StripeCustomerId, card.StripePaymentMethodId,
+                fees.TotalChargeCents, "usd", $"auth_recurring_{childJob.Id}",
+                $"Rakr recurring hold: {template.Title[..Math.Min(template.Title.Length, 25)]}", ct);
+
+            if (authResult.Succeeded)
             {
-                JobRequestId = childJob.Id,
-                CustomerProfileId = series.CustomerProfileId,
-                StripePaymentIntentId = chargeResult.PaymentIntentId,
-                AmountCents = fees.TotalChargeCents,
-                BudgetCents = fees.BudgetCents,
-                TrustFeeCents = fees.TrustFeeCents,
-                ProcessingFeeCents = fees.ProcessingFeeCents,
-                PlatformFeeCents = fees.PlatformRevenueCents,
-                VendorAmountCents = fees.BudgetCents,
-                Status = EscrowStatus.Held
-            });
+                db.EscrowTransactions.Add(new EscrowTransaction
+                {
+                    JobRequestId = childJob.Id,
+                    CustomerProfileId = series.CustomerProfileId,
+                    StripePaymentIntentId = authResult.PaymentIntentId,
+                    AmountCents = fees.TotalChargeCents,
+                    BudgetCents = fees.BudgetCents,
+                    TrustFeeCents = fees.TrustFeeCents,
+                    ProcessingFeeCents = fees.ProcessingFeeCents,
+                    PlatformFeeCents = fees.PlatformRevenueCents,
+                    VendorAmountCents = fees.BudgetCents,
+                    Status = EscrowStatus.Authorized
+                });
+            }
+            else
+            {
+                series.Status = RecurringSeriesStatus.PaymentRequired;
+                await notifications.SendInAppNotificationAsync(
+                    series.CustomerProfile.UserId,
+                    "payment_failed",
+                    "Recurring payment authorization failed",
+                    "We couldn't authorize your card for your recurring hourly job. Please update your payment method.",
+                    new { seriesId = series.Id }, ct);
+            }
         }
         else
         {
-            // Charge failed — mark series as payment required
-            series.Status = RecurringSeriesStatus.PaymentRequired;
-            await notifications.SendInAppNotificationAsync(
-                series.CustomerProfile.UserId,
-                "payment_failed",
-                "Recurring payment failed",
-                "We couldn't charge your card for your recurring job. Please update your payment method.",
-                new { seriesId = series.Id }, ct);
+            // Fixed: charge immediately (vendor is assigned, capture directly)
+            var chargeResult = await paymentService.ChargeCustomerAsync(
+                card.StripeCustomerId, card.StripePaymentMethodId,
+                fees.TotalChargeCents, "usd", $"escrow_{childJob.Id}",
+                $"Rakr recurring: {template.Title[..Math.Min(template.Title.Length, 25)]}", ct);
+
+            if (chargeResult.Succeeded)
+            {
+                db.EscrowTransactions.Add(new EscrowTransaction
+                {
+                    JobRequestId = childJob.Id,
+                    CustomerProfileId = series.CustomerProfileId,
+                    StripePaymentIntentId = chargeResult.PaymentIntentId,
+                    AmountCents = fees.TotalChargeCents,
+                    BudgetCents = fees.BudgetCents,
+                    TrustFeeCents = fees.TrustFeeCents,
+                    ProcessingFeeCents = fees.ProcessingFeeCents,
+                    PlatformFeeCents = fees.PlatformRevenueCents,
+                    VendorAmountCents = fees.BudgetCents,
+                    Status = EscrowStatus.Held
+                });
+            }
+            else
+            {
+                series.Status = RecurringSeriesStatus.PaymentRequired;
+                await notifications.SendInAppNotificationAsync(
+                    series.CustomerProfile.UserId,
+                    "payment_failed",
+                    "Recurring payment failed",
+                    "We couldn't charge your card for your recurring job. Please update your payment method.",
+                    new { seriesId = series.Id }, ct);
+            }
         }
 
         // Update series tracking

@@ -3,7 +3,7 @@
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -13,6 +13,8 @@ import { createJob } from "@/lib/api/jobs";
 import { ApiError } from "@/lib/api-client";
 import { JOB_CATEGORIES, CATEGORY_LABELS } from "@/lib/types";
 import { CategoryDetailsFields, type JobDetails } from "@/components/jobs/category-details-fields";
+import { fetchAddresses } from "@/lib/api/addresses";
+import type { CustomerAddress } from "@/lib/api/addresses";
 
 const RECURRING_FREQUENCIES = [
   { value: "weekly", label: "Weekly" },
@@ -179,6 +181,13 @@ function CreateJobFormContent() {
   const isRecurring = useWatch({ control, name: "isRecurring" });
   const pricingType = useWatch({ control, name: "pricingType" });
   const [jobDetails, setJobDetails] = useState<JobDetails>({});
+
+  // Fetch saved addresses for the picker
+  const { data: savedAddresses } = useQuery({
+    queryKey: ["customerAddresses"],
+    queryFn: fetchAddresses,
+  });
+  const [selectedAddressId, setSelectedAddressId] = useState<string>("");
   const hourlyRate = watch("hourlyRate");
   const estimatedHours = watch("estimatedHours");
   const maxHours = watch("maxHours");
@@ -237,6 +246,61 @@ function CreateJobFormContent() {
       <p className="mt-1 text-sm text-gray-500">Describe what you need done and set your budget.</p>
 
       <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="mt-8 space-y-6">
+        {/* Address (first — auto-populates job details) */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Property Address</label>
+          <p className="text-xs text-gray-400 mb-1">Select a saved address to auto-fill property details, or enter a new one.</p>
+          {savedAddresses && savedAddresses.length > 0 ? (
+            <>
+              <select
+                value={selectedAddressId}
+                onChange={(e) => {
+                  const addrId = e.target.value;
+                  setSelectedAddressId(addrId);
+                  if (addrId === "__new__") {
+                    setValue("address", "");
+                    setJobDetails({});
+                  } else {
+                    const addr = savedAddresses.find((a: CustomerAddress) => a.id === addrId);
+                    if (addr) {
+                      setValue("address", addr.formattedAddress, { shouldValidate: true });
+                      // Auto-populate job details from address
+                      if (addr.jobDetailsJson) {
+                        try { setJobDetails(JSON.parse(addr.jobDetailsJson)); } catch {}
+                      } else {
+                        setJobDetails({});
+                      }
+                    }
+                  }
+                }}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="">Select a saved address...</option>
+                {savedAddresses.map((addr: CustomerAddress) => (
+                  <option key={addr.id} value={addr.id}>
+                    {addr.isDefault ? "⭐ " : ""}{addr.label} — {addr.formattedAddress}
+                  </option>
+                ))}
+                <option value="__new__">+ Enter a new address</option>
+              </select>
+              {(selectedAddressId === "__new__" || selectedAddressId === "") && (
+                <input
+                  {...register("address")}
+                  placeholder="Full street address"
+                  className="mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              )}
+            </>
+          ) : (
+            <input
+              {...register("address")}
+              placeholder="Full street address"
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+          )}
+          {errors.address && <p className="mt-1 text-xs text-red-600">{errors.address.message}</p>}
+        </div>
+
         {/* Title */}
         <div>
           <label className="block text-sm font-medium text-gray-700">Job Title</label>
@@ -290,18 +354,6 @@ function CreateJobFormContent() {
             onChange={setJobDetails}
           />
         )}
-
-        {/* Address */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Address</label>
-          <input
-            {...register("address")}
-            placeholder="Full street address"
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-          />
-          {errors.address && <p className="mt-1 text-xs text-red-600">{errors.address.message}</p>}
-          <p className="mt-1 text-xs text-gray-400">Exact address shared only after vendor assignment.</p>
-        </div>
 
         {/* Pricing Type */}
         <div>

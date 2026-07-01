@@ -98,6 +98,7 @@ export interface VendorRequestDto {
   note: string | null;
   distanceMeters: number | null;
   status: VendorRequestStatus;
+  insuranceVerified: boolean;
   createdAt: string;
 }
 

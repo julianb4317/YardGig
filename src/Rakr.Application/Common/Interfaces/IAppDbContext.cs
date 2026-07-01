@@ -35,6 +35,7 @@ public interface IAppDbContext
     DbSet<EscrowTransaction> EscrowTransactions { get; }
     DbSet<JobMessage> JobMessages { get; }
     DbSet<RecurringJobSeries> RecurringJobSeries { get; }
+    DbSet<CustomerAddress> CustomerAddresses { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

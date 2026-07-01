@@ -5,12 +5,17 @@ import { AuthGuard } from "@/components/auth/auth-guard";
 import { hasRole } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { VendorProfileForm } from "@/components/settings/vendor-profile-form";
+import { VendorInsuranceForm } from "@/components/settings/vendor-insurance-form";
+import { VendorStripeForm } from "@/components/settings/vendor-stripe-form";
 import { CustomerProfileForm } from "@/components/settings/customer-profile-form";
 import { PaymentMethodsForm } from "@/components/settings/payment-methods-form";
+import { CustomerAddressesForm } from "@/components/settings/customer-addresses-form";
+import { CustomerReceipts } from "@/components/settings/customer-receipts";
 import { NotificationPreferencesForm } from "@/components/settings/notification-preferences-form";
 
 const TABS = [
   { id: "profile", label: "Profile" },
+  { id: "receipts", label: "Receipts" },
   { id: "notifications", label: "Notifications" },
 ] as const;
 
@@ -57,6 +62,21 @@ export default function SettingsPage() {
                   <VendorProfileForm />
                 </section>
               )}
+              {isVendor && (
+                <section className="mb-8">
+                  <VendorInsuranceForm />
+                </section>
+              )}
+              {isVendor && (
+                <section className="mb-8">
+                  <VendorStripeForm />
+                </section>
+              )}
+              {isCustomer && (
+                <section className="mb-8">
+                  <CustomerAddressesForm />
+                </section>
+              )}
               {isCustomer && (
                 <section className="mb-8">
                   <h2 className="text-lg font-semibold mb-4">Customer Profile</h2>
@@ -67,6 +87,16 @@ export default function SettingsPage() {
                 <section>
                   <PaymentMethodsForm />
                 </section>
+              )}
+            </div>
+          )}
+
+          {activeTab === "receipts" && (
+            <div id="panel-receipts" role="tabpanel" aria-labelledby="tab-receipts">
+              {isCustomer ? (
+                <CustomerReceipts />
+              ) : (
+                <p className="text-sm text-gray-500">Receipts are available for customers only. Check "My Earnings" for vendor payment history.</p>
               )}
             </div>
           )}

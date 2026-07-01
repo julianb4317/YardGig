@@ -519,6 +519,54 @@ public class PaymentsController(
         if (transaction is null) return Ok(new { hasPayment = false });
         return Ok(new { hasPayment = true, transaction });
     }
+
+    // ─────────────── CUSTOMER: RECEIPTS ───────────────
+
+    /// <summary>
+    /// Get payment receipts for the current customer, ordered by date (newest first).
+    /// </summary>
+    [HttpGet("receipts")]
+    [Authorize(Policy = "CustomerOnly")]
+    public async Task<IActionResult> GetReceipts([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        if (currentUser.UserId is null) return Unauthorized();
+
+        var customerProfile = await db.CustomerProfiles
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cp => cp.UserId == currentUser.UserId.Value);
+
+        if (customerProfile is null) return Ok(new { receipts = Array.Empty<object>(), totalCount = 0, page, pageSize });
+
+        var query = db.PaymentTransactions
+            .AsNoTracking()
+            .Include(pt => pt.JobRequest)
+            .Where(pt => pt.JobRequest.CustomerProfileId == customerProfile.Id
+                && pt.Status == PaymentStatus.Captured);
+
+        var totalCount = await query.CountAsync();
+
+        var receipts = await query
+            .OrderByDescending(pt => pt.CapturedAt ?? pt.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(pt => new
+            {
+                pt.Id,
+                pt.JobRequestId,
+                JobTitle = pt.JobRequest.Title,
+                PricingType = pt.JobRequest.PricingType,
+                pt.AmountCents,
+                pt.PlatformFeeCents,
+                pt.VendorEarnedCents,
+                BudgetCents = pt.JobRequest.BudgetCents,
+                HourlyRateCents = pt.JobRequest.HourlyRateCents,
+                pt.CapturedAt,
+                pt.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(new { receipts, totalCount, page, pageSize });
+    }
 }
 
 public record ChargeJobBody(Guid JobRequestId);

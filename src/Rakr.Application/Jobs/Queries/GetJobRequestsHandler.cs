@@ -47,6 +47,7 @@ public class GetJobRequestsHandler(
                     ? vr.VendorProfile.HomeLocation.Distance(job.Location)
                     : null,
                 vr.Status.ToString(),
+                vr.VendorProfile.InsuranceVerified,
                 vr.CreatedAt
             ))
             .ToListAsync(cancellationToken);

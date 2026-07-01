@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Star, MapPin, DollarSign, CheckCircle, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Star, MapPin, DollarSign, CheckCircle, AlertTriangle, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { AuthGuard } from "@/components/auth/auth-guard";
@@ -42,6 +42,11 @@ function VendorRequestCard({
           >
             {req.vendorName}
           </button>
+          {req.insuranceVerified && (
+            <span className="ml-1.5 inline-flex items-center gap-0.5 text-xs text-green-700 bg-green-50 border border-green-200 rounded px-1.5 py-0.5" title="Insurance Verified">
+              <ShieldCheck className="h-3 w-3" /> Insured
+            </span>
+          )}
           {req.businessName && <p className="text-sm text-gray-500">{req.businessName}</p>}
         </div>
         <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${

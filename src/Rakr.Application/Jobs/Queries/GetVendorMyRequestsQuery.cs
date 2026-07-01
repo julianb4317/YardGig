@@ -12,5 +12,9 @@ public record VendorMyRequestDto(
     string Status,         // VendorRequest status (Pending, Accepted, etc.)
     string JobStatus,      // Actual job status (Open, Assigned, InProgress, Completed, etc.)
     int? ProposedPriceCents,
+    string PricingType,
+    int? HourlyRateCents,
+    decimal? EstimatedHours,
+    decimal? MaxHours,
     DateTime CreatedAt
 );

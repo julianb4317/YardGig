@@ -36,7 +36,17 @@ public class ProfilesController(IAppDbContext db, ICurrentUserService currentUse
                 Longitude = (double?)null,
                 VerificationStatus = "Pending",
                 AverageRating = 0.0,
-                TotalJobsCompleted = 0
+                TotalJobsCompleted = 0,
+                BusinessAddress = (string?)null,
+                BusinessLatitude = (double?)null,
+                BusinessLongitude = (double?)null,
+                InsuranceCarrier = (string?)null,
+                InsuranceExpirationDate = (DateTime?)null,
+                InsuranceLiabilityType = (string?)null,
+                InsuranceLiabilityAmountCents = (int?)null,
+                InsuranceDocUrl = (string?)null,
+                InsuranceVerified = false,
+                StripeOnboarded = false
             });
         }
 
@@ -51,7 +61,17 @@ public class ProfilesController(IAppDbContext db, ICurrentUserService currentUse
             Longitude = profile.HomeLocation?.X,
             profile.VerificationStatus,
             profile.AverageRating,
-            profile.TotalJobsCompleted
+            profile.TotalJobsCompleted,
+            profile.BusinessAddress,
+            profile.BusinessLatitude,
+            profile.BusinessLongitude,
+            profile.InsuranceCarrier,
+            profile.InsuranceExpirationDate,
+            profile.InsuranceLiabilityType,
+            profile.InsuranceLiabilityAmountCents,
+            profile.InsuranceDocUrl,
+            profile.InsuranceVerified,
+            profile.StripeOnboarded
         });
     }
 
@@ -72,6 +92,17 @@ public class ProfilesController(IAppDbContext db, ICurrentUserService currentUse
         if (request.ServiceCategories is not null) profile.ServiceCategories = request.ServiceCategories.ToList();
         if (request.ServiceRadiusMiles.HasValue) profile.ServiceRadiusMiles = request.ServiceRadiusMiles.Value;
         if (request.InsuranceDocUrl is not null) profile.InsuranceDocUrl = request.InsuranceDocUrl;
+        if (request.InsuranceCarrier is not null) profile.InsuranceCarrier = request.InsuranceCarrier;
+        if (request.InsuranceExpirationDate.HasValue) profile.InsuranceExpirationDate = request.InsuranceExpirationDate.Value;
+        if (request.InsuranceLiabilityType is not null) profile.InsuranceLiabilityType = request.InsuranceLiabilityType;
+        if (request.InsuranceLiabilityAmountCents.HasValue) profile.InsuranceLiabilityAmountCents = request.InsuranceLiabilityAmountCents.Value;
+
+        if (request.BusinessAddress is not null)
+        {
+            profile.BusinessAddress = request.BusinessAddress;
+            var bizPoint = await geocoding.GeocodeAddressAsync(request.BusinessAddress);
+            if (bizPoint is not null) { profile.BusinessLatitude = bizPoint.Y; profile.BusinessLongitude = bizPoint.X; }
+        }
 
         if (request.Address is not null)
         {
@@ -101,6 +132,7 @@ public class ProfilesController(IAppDbContext db, ICurrentUserService currentUse
             return Ok(new
             {
                 Id = (Guid?)null,
+                BusinessName = (string?)null,
                 DefaultAddress = (string?)null,
                 Latitude = (double?)null,
                 Longitude = (double?)null,
@@ -115,6 +147,7 @@ public class ProfilesController(IAppDbContext db, ICurrentUserService currentUse
         return Ok(new
         {
             profile.Id,
+            profile.BusinessName,
             profile.DefaultAddress,
             Latitude = profile.DefaultLocation?.Y,
             Longitude = profile.DefaultLocation?.X,
@@ -133,6 +166,8 @@ public class ProfilesController(IAppDbContext db, ICurrentUserService currentUse
             .FirstOrDefaultAsync(cp => cp.UserId == currentUser.UserId);
 
         if (profile is null) return NotFound();
+
+        if (request.BusinessName is not null) profile.BusinessName = request.BusinessName;
 
         if (request.DefaultAddress is not null)
         {
@@ -178,7 +213,8 @@ public class ProfilesController(IAppDbContext db, ICurrentUserService currentUse
             profile.VerificationStatus,
             profile.AverageRating,
             TotalJobsCompleted = jobsCount,
-            MemberSince = profile.CreatedAt
+            MemberSince = profile.CreatedAt,
+            profile.InsuranceVerified
         });
     }
 
@@ -221,7 +257,12 @@ public record UpdateVendorProfileRequest(
     string[]? ServiceCategories,
     int? ServiceRadiusMiles,
     string? Address,
-    string? InsuranceDocUrl
+    string? InsuranceDocUrl,
+    string? BusinessAddress,
+    string? InsuranceCarrier,
+    DateTime? InsuranceExpirationDate,
+    string? InsuranceLiabilityType,
+    int? InsuranceLiabilityAmountCents
 );
 
-public record UpdateCustomerProfileRequest(string? DefaultAddress);
+public record UpdateCustomerProfileRequest(string? DefaultAddress, string? BusinessName = null);

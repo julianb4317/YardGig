@@ -22,6 +22,10 @@ public class GetVendorMyRequestsHandler(IAppDbContext db) : IRequestHandler<GetV
                 vr.Status.ToString(),
                 vr.JobRequest.Status.ToString(),
                 vr.ProposedPriceCents,
+                vr.JobRequest.PricingType,
+                vr.JobRequest.HourlyRateCents,
+                vr.JobRequest.EstimatedHours,
+                vr.JobRequest.MaxHours,
                 vr.CreatedAt
             ))
             .ToListAsync(cancellationToken);

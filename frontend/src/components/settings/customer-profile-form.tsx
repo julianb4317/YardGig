@@ -13,6 +13,7 @@ import { ApiError } from "@/lib/api-client";
 import { CheckCircle, XCircle } from "lucide-react";
 
 const schema = z.object({
+  businessName: z.string().max(200).optional(),
   defaultAddress: z.string().min(5, "Enter a valid address").max(500),
 });
 
@@ -32,12 +33,12 @@ export function CustomerProfileForm() {
 
   useEffect(() => {
     if (profile) {
-      reset({ defaultAddress: profile.defaultAddress ?? "" });
+      reset({ businessName: profile.businessName ?? "", defaultAddress: profile.defaultAddress ?? "" });
     }
   }, [profile, reset]);
 
   const mutation = useMutation({
-    mutationFn: (data: FormData) => updateCustomerProfile({ defaultAddress: data.defaultAddress }),
+    mutationFn: (data: FormData) => updateCustomerProfile({ defaultAddress: data.defaultAddress, businessName: data.businessName || undefined }),
     onSuccess: () => {
       toast.success("Profile updated.");
       queryClient.invalidateQueries({ queryKey: ["customerProfile"] });
@@ -56,6 +57,17 @@ export function CustomerProfileForm() {
         ) : (
           <span className="flex items-center gap-1 text-amber-600"><XCircle className="h-4 w-4" /> No payment method — add one before paying for jobs</span>
         )}
+      </div>
+
+      <div>
+        <label htmlFor="businessName" className="block text-sm font-medium text-gray-700">Business Name (optional)</label>
+        <input
+          id="businessName"
+          {...register("businessName")}
+          placeholder="If posting jobs on behalf of a business"
+          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+        />
+        <p className="mt-1 text-xs text-gray-400">If populated, this will display as your name on job postings.</p>
       </div>
 
       <div>

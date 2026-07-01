@@ -16,5 +16,6 @@ public record VendorRequestDto(
     string? Note,
     double? DistanceMeters,
     string Status,
+    bool InsuranceVerified,
     DateTime CreatedAt
 );

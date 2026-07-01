@@ -24,6 +24,10 @@ interface VendorMyRequest {
   status: string;
   jobStatus: string;
   proposedPriceCents: number | null;
+  pricingType: string;
+  hourlyRateCents: number | null;
+  estimatedHours: number | null;
+  maxHours: number | null;
   createdAt: string;
 }
 
@@ -40,13 +44,16 @@ export default function VendorEarningsPage() {
 
   // Calculate category breakdown from completed jobs
   const completedJobs = requests?.filter((r) => r.status === "Accepted" && ["Paid", "Completed", "Closed"].includes(r.jobStatus)) ?? [];
-  const totalEarnedFromJobs = completedJobs.reduce((sum, j) => sum + Math.round(j.budgetCents * 0.85), 0); // 85% after platform fee
+  const totalEarnedFromJobs = completedJobs.reduce((sum, j) => sum + j.budgetCents, 0); // Vendor gets 100% of budget
 
   // Group earnings by job for breakdown
   const jobBreakdown = completedJobs.map((j) => ({
     title: j.jobTitle,
     budgetCents: j.budgetCents,
-    earnedCents: Math.round(j.budgetCents * 0.85),
+    earnedCents: j.budgetCents, // Vendor gets full budget (fees charged to customer separately)
+    pricingType: j.pricingType ?? "fixed",
+    hourlyRateCents: j.hourlyRateCents,
+    estimatedHours: j.estimatedHours,
     date: j.createdAt,
   }));
 
@@ -105,7 +112,8 @@ export default function VendorEarningsPage() {
                 <div>
                   <p className="text-sm font-medium text-gray-700">How payouts work</p>
                   <p className="mt-1 text-xs text-gray-500">
-                    When a customer verifies your work, 85% of the job budget is added to your available balance (15% platform fee).
+                    When a customer verifies your work, you receive 100% of the job budget (or hourly total).
+                    All platform fees are charged separately to the customer.
                     Payouts are processed weekly to your bank account on file.
                   </p>
                 </div>
@@ -127,8 +135,8 @@ export default function VendorEarningsPage() {
                     <thead className="bg-gray-50 border-b">
                       <tr>
                         <th className="text-left px-4 py-3 font-medium text-gray-600">Job</th>
-                        <th className="text-right px-4 py-3 font-medium text-gray-600">Budget</th>
-                        <th className="text-right px-4 py-3 font-medium text-gray-600">Your Earnings</th>
+                        <th className="text-left px-4 py-3 font-medium text-gray-600">Type</th>
+                        <th className="text-right px-4 py-3 font-medium text-gray-600">Earnings</th>
                         <th className="text-right px-4 py-3 font-medium text-gray-600">Date</th>
                       </tr>
                     </thead>
@@ -136,7 +144,15 @@ export default function VendorEarningsPage() {
                       {jobBreakdown.map((job, i) => (
                         <tr key={i} className="hover:bg-gray-50">
                           <td className="px-4 py-3 font-medium text-gray-900">{job.title}</td>
-                          <td className="px-4 py-3 text-right text-gray-500">{formatCents(job.budgetCents)}</td>
+                          <td className="px-4 py-3 text-gray-500">
+                            {job.pricingType === "hourly" ? (
+                              <span className="text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded px-1.5 py-0.5">
+                                ⏱ {formatCents(job.hourlyRateCents ?? 0)}/hr
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-500">Fixed</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-right font-medium text-emerald-600">{formatCents(job.earnedCents)}</td>
                           <td className="px-4 py-3 text-right text-gray-400">{new Date(job.date).toLocaleDateString()}</td>
                         </tr>
@@ -144,10 +160,7 @@ export default function VendorEarningsPage() {
                     </tbody>
                     <tfoot className="bg-gray-50 border-t">
                       <tr>
-                        <td className="px-4 py-3 font-semibold text-gray-900">Total</td>
-                        <td className="px-4 py-3 text-right font-medium text-gray-700">
-                          {formatCents(completedJobs.reduce((s, j) => s + j.budgetCents, 0))}
-                        </td>
+                        <td className="px-4 py-3 font-semibold text-gray-900" colSpan={2}>Total ({completedJobs.length} jobs)</td>
                         <td className="px-4 py-3 text-right font-bold text-emerald-600">
                           {formatCents(totalEarnedFromJobs)}
                         </td>
