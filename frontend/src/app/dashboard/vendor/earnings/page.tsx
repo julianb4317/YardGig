@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { DollarSign, TrendingUp, Clock, CreditCard } from "lucide-react";
+import Link from "next/link";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { PageLoader } from "@/components/ui/spinner";
 import { ErrorState } from "@/components/ui/error-state";
@@ -135,7 +136,11 @@ export default function VendorEarningsPage() {
                     <tbody className="divide-y divide-gray-100">
                       {earnings.map((item) => (
                         <tr key={item.id} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 font-medium text-gray-900">{item.jobTitle}</td>
+                          <td className="px-4 py-3 font-medium">
+                            <Link href={`/jobs/${item.jobRequestId}`} className="text-brand-600 hover:text-brand-700 hover:underline">
+                              {item.jobTitle}
+                            </Link>
+                          </td>
                           <td className="px-4 py-3 text-gray-500">
                             {item.pricingType === "hourly" ? (
                               <span className="text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded px-1.5 py-0.5">
