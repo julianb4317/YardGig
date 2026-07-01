@@ -59,7 +59,7 @@ public class ProfilesController(IAppDbContext db, ICurrentUserService currentUse
             profile.ServiceRadiusMiles,
             Latitude = profile.HomeLocation?.Y,
             Longitude = profile.HomeLocation?.X,
-            profile.VerificationStatus,
+            VerificationStatus = profile.VerificationStatus.ToString(),
             profile.AverageRating,
             profile.TotalJobsCompleted,
             profile.BusinessAddress,

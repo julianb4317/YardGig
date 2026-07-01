@@ -13,18 +13,16 @@ import { CustomerAddressesForm } from "@/components/settings/customer-addresses-
 import { CustomerReceipts } from "@/components/settings/customer-receipts";
 import { NotificationPreferencesForm } from "@/components/settings/notification-preferences-form";
 
-const TABS = [
-  { id: "profile", label: "Profile" },
-  { id: "receipts", label: "Receipts" },
-  { id: "notifications", label: "Notifications" },
-] as const;
-
-type TabId = (typeof TABS)[number]["id"];
-
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<TabId>("profile");
+  const [activeTab, setActiveTab] = useState<string>("profile");
   const isVendor = hasRole("Vendor");
   const isCustomer = hasRole("Customer");
+
+  const tabs = [
+    { id: "profile", label: "Profile" },
+    ...(isCustomer ? [{ id: "receipts", label: "Receipts" }] : []),
+    { id: "notifications", label: "Notifications" },
+  ];
 
   return (
     <AuthGuard>
@@ -33,7 +31,7 @@ export default function SettingsPage() {
 
         {/* Tab navigation */}
         <nav className="mt-6 flex border-b" role="tablist" aria-label="Settings sections">
-          {TABS.map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab.id}
               role="tab"
@@ -91,13 +89,9 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {activeTab === "receipts" && (
+          {activeTab === "receipts" && isCustomer && (
             <div id="panel-receipts" role="tabpanel" aria-labelledby="tab-receipts">
-              {isCustomer ? (
-                <CustomerReceipts />
-              ) : (
-                <p className="text-sm text-gray-500">Receipts are available for customers only. Check "My Earnings" for vendor payment history.</p>
-              )}
+              <CustomerReceipts />
             </div>
           )}
 
