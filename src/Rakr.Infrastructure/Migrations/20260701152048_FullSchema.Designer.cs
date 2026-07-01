@@ -14,7 +14,7 @@ using Rakr.Infrastructure.Persistence;
 namespace Rakr.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260701151125_FullSchema")]
+    [Migration("20260701152048_FullSchema")]
     partial class FullSchema
     {
         /// <inheritdoc />
