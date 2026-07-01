@@ -235,8 +235,12 @@ export default function JobRequestsPage() {
         <ConfirmDialog
           open={!!confirmTarget}
           title="Accept this vendor?"
-          description="They will be assigned to your job. Other pending requests will be automatically rejected."
-          confirmLabel="Yes, Assign"
+          description={
+            job?.pricingType === "hourly"
+              ? "They will be assigned to your job. Your authorization hold remains in place — you will NOT be charged until you review and approve the actual hours worked after completion."
+              : "They will be assigned to your job. Your authorization hold remains in place — you will NOT be charged until you verify the completed work."
+          }
+          confirmLabel="Assign Vendor"
           isPending={assignMutation.isPending}
           onConfirm={handleConfirmAssign}
           onCancel={() => setConfirmTarget(null)}

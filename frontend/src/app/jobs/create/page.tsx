@@ -565,14 +565,25 @@ function CreateJobFormContent() {
               A valid payment method is required to set up a recurring job.
             </p>
           </div>
+        ) : pricingType === "hourly" ? (
+          <div className="rounded-lg border border-purple-200 bg-purple-50 p-4">
+            <p className="text-sm font-medium text-purple-800">⏱ Hourly Job — Authorization Hold</p>
+            <div className="mt-2 text-xs text-purple-600 space-y-1.5">
+              <p><strong>When you post:</strong> A hold for the maximum amount (rate × max hours + fees) is placed on your card. You are NOT charged yet.</p>
+              <p><strong>When you assign a vendor:</strong> The hold remains — still no charge.</p>
+              <p><strong>When work is complete:</strong> You'll review the actual hours worked and approve the final amount. Only then is your card charged for the actual hours — not the maximum.</p>
+              <p><strong>If you cancel before assignment:</strong> The hold is released. $0 charged.</p>
+            </div>
+          </div>
         ) : (
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-            <p className="text-sm font-medium text-blue-800">🔒 Secure Authorization Hold</p>
-            <p className="mt-1 text-xs text-blue-600">
-              A hold will be placed on your card when you post this job — you are NOT charged yet.
-              The hold is only captured when you assign a vendor. If you cancel before that, the hold is released at zero cost.
-              After the vendor completes the work and you verify, funds are released to them.
-            </p>
+            <p className="text-sm font-medium text-blue-800">🔒 Fixed Price — Authorization Hold</p>
+            <div className="mt-2 text-xs text-blue-600 space-y-1.5">
+              <p><strong>When you post:</strong> A hold for the full amount (budget + fees) is placed on your card. You are NOT charged yet.</p>
+              <p><strong>When you assign a vendor:</strong> The hold remains — still no charge.</p>
+              <p><strong>When work is complete:</strong> You verify the work, your card is charged, and funds are released to the vendor.</p>
+              <p><strong>If you cancel before verification:</strong> The hold is released. $0 charged.</p>
+            </div>
           </div>
         )}
 

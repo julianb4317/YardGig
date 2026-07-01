@@ -144,15 +144,15 @@ export function PaymentButton({
         ) : (
           <DollarSign className="h-4 w-4" />
         )}
-        {isHourly ? "Review Hours & Pay" : "Verify & Release Payment"}
+        {isHourly ? "Review Hours & Charge Card" : "Verify & Release Payment"}
       </button>
 
       {/* Fixed-price payment confirmation */}
       <ConfirmDialog
         open={confirmOpen}
-        title="Verify work and release payment?"
-        description={`The vendor will receive the full ${formatCents(budgetCents)} for this job. Your card was charged when the vendor was assigned (including service fees). Confirming releases the funds to the vendor's balance.`}
-        confirmLabel={chargeMutation.isPending ? "Processing..." : "Release Payment"}
+        title="Verify & Charge Card"
+        description={`You are confirming the work is complete. Your card will now be charged ${formatCents(budgetCents)} (plus fees) and the funds will be released to the vendor. This action is final.`}
+        confirmLabel={chargeMutation.isPending ? "Processing..." : "Confirm & Charge Card"}
         isPending={chargeMutation.isPending}
         onConfirm={() => chargeMutation.mutate()}
         onCancel={() => setConfirmOpen(false)}
@@ -162,8 +162,10 @@ export function PaymentButton({
       {hourlyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold">Review Hourly Charges</h3>
-            <p className="mt-1 text-sm text-gray-500">Confirm the hours worked and approve the payment.</p>
+            <h3 className="text-lg font-semibold">Review & Approve Hours</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Your card has NOT been charged yet — only a hold was placed. By approving, your card will be charged for the actual hours below.
+            </p>
 
             <div className="mt-4 space-y-3 text-sm">
               <div className="flex justify-between">
@@ -222,7 +224,7 @@ export function PaymentButton({
                 className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
               >
                 {hourlyChargeMutation.isPending && <Spinner className="h-4 w-4 border-white border-t-transparent" />}
-                Approve & Pay {formatCents(hourlyChargeCents)}
+                Charge Card — {formatCents(hourlyChargeCents)}
               </button>
             </div>
           </div>

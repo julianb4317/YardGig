@@ -232,9 +232,18 @@ public class PaymentsController(
 
             if (escrow is not null)
             {
-                // ESCROW EXISTS: Release held funds to vendor
+                // ESCROW EXISTS: Capture the authorization hold (card is charged NOW)
+                // Then release funds to vendor
+                if (escrow.Status == EscrowStatus.Authorized && !string.IsNullOrEmpty(escrow.StripePaymentIntentId))
+                {
+                    var captureResult = await paymentService.CapturePaymentAsync(escrow.StripePaymentIntentId);
+                    if (!captureResult.Succeeded)
+                        return BadRequest(new { errors = new[] { "Failed to capture payment. Please try again." } });
+                }
+
                 escrow.Status = EscrowStatus.Released;
                 escrow.ReleasedAt = DateTime.UtcNow;
+                escrow.CapturedAt ??= DateTime.UtcNow;
                 amountCents = escrow.AmountCents;
                 platformFeeCents = escrow.PlatformFeeCents;
                 vendorNetCents = escrow.VendorAmountCents;
