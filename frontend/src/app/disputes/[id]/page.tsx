@@ -1,14 +1,16 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 import { ArrowLeft, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { ErrorState } from "@/components/ui/error-state";
 import { PageLoader } from "@/components/ui/spinner";
 import { PhotoGrid } from "@/components/ui/photo-lightbox";
 import { DisputeChat } from "@/components/disputes/dispute-chat";
-import { apiClient } from "@/lib/api-client";
+import { apiClient, ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
 interface DisputeDetail {
@@ -112,11 +114,67 @@ export default function DisputeDetailPage() {
           </div>
         )}
 
+        {/* Close dispute button (only for open disputes) */}
+        {(dispute.status === "Open" || dispute.status === "Investigating") && (
+          <CloseDisputeButton disputeId={dispute.id} />
+        )}
+
         {/* Chat */}
         <div className="mt-8 border-t pt-6">
           <DisputeChat disputeId={dispute.id} />
         </div>
       </div>
     </AuthGuard>
+  );
+}
+
+function CloseDisputeButton({ disputeId }: { disputeId: string }) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const closeMut = useMutation({
+    mutationFn: () => apiClient<{ success: boolean }>(`/api/disputes/${disputeId}/close`, { method: "PUT" }),
+    onSuccess: () => {
+      toast.success("Dispute closed. Payment flow resumed.");
+      queryClient.invalidateQueries({ queryKey: ["dispute", disputeId] });
+      queryClient.invalidateQueries({ queryKey: ["myDisputes"] });
+    },
+    onError: (err: ApiError) => toast.error(err.errors[0] ?? "Failed to close dispute."),
+  });
+
+  return (
+    <>
+      <div className="mt-6">
+        <button
+          onClick={() => setConfirmOpen(true)}
+          className="flex items-center gap-1.5 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Close Dispute
+        </button>
+        <p className="mt-1 text-xs text-gray-400">Closing the dispute resumes the normal payment flow. The vendor will be paid within 48 hours.</p>
+      </div>
+
+      {confirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setConfirmOpen(false)}>
+          <div className="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold">Close this dispute?</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              The job will return to "Completed" status and the normal payment verification flow will resume. You'll have 48 hours to verify, or payment releases automatically.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button onClick={() => setConfirmOpen(false)} className="rounded-md border px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button
+                onClick={() => { closeMut.mutate(); setConfirmOpen(false); }}
+                disabled={closeMut.isPending}
+                className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+              >
+                Close Dispute
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

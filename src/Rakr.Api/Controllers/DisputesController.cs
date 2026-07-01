@@ -205,6 +205,49 @@ public class DisputesController(IAppDbContext db, ICurrentUserService currentUse
 
         return Ok(new { messageId = message.Id, message.CreatedAt });
     }
+
+    /// <summary>
+    /// User closes their own dispute (withdraws it).
+    /// Resets job status back to Completed so payment flow can resume.
+    /// </summary>
+    [HttpPut("{id:guid}/close")]
+    public async Task<IActionResult> CloseDispute(Guid id)
+    {
+        if (currentUser.UserId is null) return Unauthorized();
+
+        var dispute = await db.Disputes
+            .Include(d => d.JobRequest)
+                .ThenInclude(j => j.Assignment)
+            .FirstOrDefaultAsync(d => d.Id == id);
+
+        if (dispute is null) return NotFound(new { errors = new[] { "Dispute not found." } });
+
+        // Only the person who raised it can close it
+        if (dispute.RaisedById != currentUser.UserId.Value)
+            return BadRequest(new { errors = new[] { "Only the person who filed this dispute can close it." } });
+
+        if (dispute.Status != DisputeStatus.Open && dispute.Status != DisputeStatus.Investigating)
+            return BadRequest(new { errors = new[] { "This dispute is already closed." } });
+
+        dispute.Status = DisputeStatus.Resolved;
+        dispute.Resolution = "Closed by user";
+        dispute.ResolvedAt = DateTime.UtcNow;
+
+        // Reset job status to Completed so payment flow resumes (48h timer restarts)
+        if (dispute.JobRequest.Status == JobStatus.Disputed)
+        {
+            dispute.JobRequest.Status = JobStatus.Completed;
+            dispute.JobRequest.UpdatedAt = DateTime.UtcNow;
+            if (dispute.JobRequest.Assignment != null)
+            {
+                dispute.JobRequest.Assignment.CompletedAt = DateTime.UtcNow;
+            }
+        }
+
+        await db.SaveChangesAsync();
+
+        return Ok(new { success = true, message = "Dispute closed. Payment flow resumed." });
+    }
 }
 
 public record RaiseDisputeRequest(Guid JobRequestId, string Summary, string Reason, string[]? EvidencePhotos = null);
