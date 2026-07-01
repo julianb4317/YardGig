@@ -77,7 +77,16 @@ export function JobCard({ job }: { job: JobDetail }) {
       <p className="mt-1.5 text-sm text-gray-500 line-clamp-2">{job.description}</p>
 
       <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-500">
-        <span className="font-semibold text-gray-900 text-sm">{formatCents(job.budgetCents)}</span>
+        {job.pricingType === "hourly" ? (
+          <span className="flex items-center gap-1.5 font-semibold text-gray-900 text-sm">
+            {formatCents(job.hourlyRateCents ?? 0)}/hr
+            <span className="font-normal text-xs text-purple-600 bg-purple-50 border border-purple-200 rounded px-1.5 py-0.5">
+              ⏱ Est. {job.estimatedHours}h · Max {job.maxHours}h
+            </span>
+          </span>
+        ) : (
+          <span className="font-semibold text-gray-900 text-sm">{formatCents(job.budgetCents)}</span>
+        )}
 
         {job.address && (
           <span className="flex items-center gap-1">

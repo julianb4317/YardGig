@@ -15,7 +15,11 @@ public record MapPinDto(
     DateTime? ScheduleEnd,
     double DistanceMeters,
     bool VendorRequested,
-    DateTime? ExpiresAt
+    DateTime? ExpiresAt,
+    string PricingType = "fixed",
+    int? HourlyRateCents = null,
+    decimal? EstimatedHours = null,
+    decimal? MaxHours = null
 );
 
 public record MapQueryResponse(

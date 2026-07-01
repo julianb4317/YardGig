@@ -40,7 +40,16 @@ function VendorJobCard({ pin }: { pin: MapPinType }) {
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-gray-500">
-        <span className="font-semibold text-gray-900">{formatCents(pin.budgetCents)}</span>
+        {pin.pricingType === "hourly" ? (
+          <span className="font-semibold text-gray-900">
+            {formatCents(pin.hourlyRateCents ?? 0)}/hr
+            <span className="ml-1.5 font-normal text-xs text-purple-600 bg-purple-50 border border-purple-200 rounded px-1.5 py-0.5">
+              ⏱ Est. {pin.estimatedHours}h · Max {pin.maxHours}h
+            </span>
+          </span>
+        ) : (
+          <span className="font-semibold text-gray-900">{formatCents(pin.budgetCents)}</span>
+        )}
         <span className="flex items-center gap-1">
           <MapPin className="h-3.5 w-3.5" /> {distanceMiles} mi
         </span>

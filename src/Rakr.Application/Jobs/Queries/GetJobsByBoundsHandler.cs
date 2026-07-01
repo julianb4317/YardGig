@@ -99,7 +99,11 @@ public class GetJobsByBoundsHandler(IAppDbContext db) : IRequestHandler<GetJobsB
                 j.ScheduleEnd,
                 distanceMeters,
                 requestedJobIds.Contains(j.Id),
-                j.ExpiresAt
+                j.ExpiresAt,
+                j.PricingType,
+                j.HourlyRateCents,
+                j.EstimatedHours,
+                j.MaxHours
             );
         }).ToList();
 

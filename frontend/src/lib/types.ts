@@ -64,6 +64,10 @@ export interface MapPin {
   distanceMeters: number;
   vendorRequested: boolean;
   expiresAt: string | null;
+  pricingType?: string;
+  hourlyRateCents?: number | null;
+  estimatedHours?: number | null;
+  maxHours?: number | null;
 }
 
 export interface MapQueryResponse {
