@@ -75,13 +75,23 @@ export default function JobDetailPage() {
         <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-600">
           <span className="flex items-center gap-1.5 font-semibold text-gray-900 text-base">
             <DollarSign className="h-4 w-4 text-brand-600" />
-            {formatCents(job.budgetCents)}
+            {job.pricingType === "hourly"
+              ? `${formatCents(job.hourlyRateCents ?? 0)}/hr`
+              : formatCents(job.budgetCents)
+            }
             {job.originalBudgetCents && job.originalBudgetCents !== job.budgetCents && (
               <span className={`text-xs font-medium ${job.budgetCents > job.originalBudgetCents ? "text-green-600" : "text-red-600"}`}>
                 ({job.budgetCents > job.originalBudgetCents ? "↑" : "↓"} from {formatCents(job.originalBudgetCents)})
               </span>
             )}
           </span>
+
+          {/* Hourly pricing details */}
+          {job.pricingType === "hourly" && (
+            <span className="flex items-center gap-1.5 rounded-md bg-purple-50 border border-purple-200 px-2 py-0.5 text-xs font-medium text-purple-700">
+              ⏱ Hourly · Est. {job.estimatedHours}h · Max {job.maxHours}h · Budget {formatCents(job.budgetCents)}
+            </span>
+          )}
 
           <span className="flex items-center gap-1.5">
             <MapPin className="h-4 w-4" />

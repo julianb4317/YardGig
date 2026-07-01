@@ -13,13 +13,17 @@ import { ErrorState } from "@/components/ui/error-state";
 import { fetchJobDetail } from "@/lib/api/jobs";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { JOB_CATEGORIES, CATEGORY_LABELS } from "@/lib/types";
-import { useEffect } from "react";
+import { CategoryDetailsFields, type JobDetails } from "@/components/jobs/category-details-fields";
+import { useEffect, useState } from "react";
 
 const editJobSchema = z.object({
   title: z.string().min(3, "Title required (min 3 chars)").max(200),
   description: z.string().min(10, "Describe the work (min 10 chars)").max(5000),
   categories: z.array(z.string()).min(1, "Select at least one category").max(5),
-  budgetDollars: z.number({ invalid_type_error: "Enter a budget" }).min(1, "Min $1").max(10000, "Max $10,000"),
+  budgetDollars: z.number().min(1).max(10000).optional().or(z.nan().transform(() => undefined)),
+  hourlyRate: z.number().min(5).optional().or(z.nan().transform(() => undefined)),
+  estimatedHours: z.number().min(0.5).optional().or(z.nan().transform(() => undefined)),
+  maxHours: z.number().min(0.5).optional().or(z.nan().transform(() => undefined)),
   scheduleStart: z.string().optional(),
   scheduleEnd: z.string().optional(),
 }).superRefine((data, ctx) => {
@@ -36,12 +40,15 @@ export default function EditJobPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [jobDetails, setJobDetails] = useState<JobDetails>({});
 
   const { data: job, isLoading, isError } = useQuery({
     queryKey: ["job", id],
     queryFn: () => fetchJobDetail(id),
     enabled: !!id,
   });
+
+  const isHourly = job?.pricingType === "hourly";
 
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<EditJobForm>({
     resolver: zodResolver(editJobSchema),
@@ -54,9 +61,18 @@ export default function EditJobPage() {
       setValue("title", job.title);
       setValue("description", job.description);
       setValue("categories", job.categories);
-      setValue("budgetDollars", job.budgetCents / 100);
+      if (job.pricingType === "hourly") {
+        setValue("hourlyRate", (job.hourlyRateCents ?? 0) / 100);
+        setValue("estimatedHours", job.estimatedHours ?? undefined);
+        setValue("maxHours", job.maxHours ?? undefined);
+      } else {
+        setValue("budgetDollars", job.budgetCents / 100);
+      }
       if (job.scheduleStart) setValue("scheduleStart", job.scheduleStart.slice(0, 16));
       if (job.scheduleEnd) setValue("scheduleEnd", job.scheduleEnd.slice(0, 16));
+      if (job.jobDetailsJson) {
+        try { setJobDetails(JSON.parse(job.jobDetailsJson)); } catch {}
+      }
     }
   }, [job, setValue]);
 
@@ -69,21 +85,27 @@ export default function EditJobPage() {
   };
 
   const mutation = useMutation({
-    mutationFn: (data: EditJobForm) =>
-      apiClient<{ success: boolean; budgetChanged?: boolean; oldBudgetCents?: number; newBudgetCents?: number }>(`/api/jobs/${id}`, {
+    mutationFn: (data: EditJobForm) => {
+      const budgetCents = isHourly
+        ? Math.round((data.hourlyRate ?? 0) * (data.maxHours ?? 0) * 100)
+        : Math.round((data.budgetDollars ?? 0) * 100);
+
+      return apiClient<{ success: boolean; budgetChanged?: boolean; oldBudgetCents?: number; newBudgetCents?: number }>(`/api/jobs/${id}`, {
         method: "PUT",
         body: {
           title: data.title,
           description: data.description,
           categories: data.categories,
-          budgetCents: Math.round(data.budgetDollars * 100),
+          budgetCents,
           scheduleStart: data.scheduleStart || undefined,
           scheduleEnd: data.scheduleEnd || undefined,
+          jobDetailsJson: Object.keys(jobDetails).length > 0 ? JSON.stringify(jobDetails) : undefined,
         },
-      }),
+      });
+    },
     onSuccess: (result) => {
       if (result.budgetChanged) {
-        toast.success(`Job updated! Budget changed from $${((result.oldBudgetCents ?? 0) / 100).toFixed(2)} to $${((result.newBudgetCents ?? 0) / 100).toFixed(2)}. Payment hold updated.`);
+        toast.success(`Job updated! Budget changed. Payment hold updated.`);
       } else {
         toast.success("Job updated!");
       }
@@ -171,20 +193,71 @@ export default function EditJobPage() {
             {errors.categories && <p className="mt-1 text-xs text-red-600">{errors.categories.message}</p>}
           </div>
 
-          {/* Budget */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Budget ($)</label>
-            <input
-              {...register("budgetDollars", { valueAsNumber: true })}
-              type="number"
-              min={1}
-              max={10000}
-              step={1}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          {/* Category-specific details */}
+          {selectedCategories && selectedCategories.length > 0 && (
+            <CategoryDetailsFields
+              categories={selectedCategories}
+              value={jobDetails}
+              onChange={setJobDetails}
             />
-            {errors.budgetDollars && <p className="mt-1 text-xs text-red-600">{errors.budgetDollars.message}</p>}
-            <p className="mt-1 text-xs text-gray-400">If you change the budget, your payment authorization will be updated to reflect the new amount.</p>
-          </div>
+          )}
+
+          {/* Pricing - Fixed */}
+          {!isHourly && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Budget ($)</label>
+              <input
+                {...register("budgetDollars", { valueAsNumber: true })}
+                type="number"
+                min={1}
+                max={10000}
+                step={1}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+              {errors.budgetDollars && <p className="mt-1 text-xs text-red-600">{errors.budgetDollars.message}</p>}
+              <p className="mt-1 text-xs text-gray-400">If you change the budget, your payment authorization will be updated.</p>
+            </div>
+          )}
+
+          {/* Pricing - Hourly */}
+          {isHourly && (
+            <div className="rounded-lg border border-gray-200 p-4 space-y-4">
+              <p className="text-sm font-semibold text-gray-700">⏱ Hourly Pricing</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Hourly Rate ($)</label>
+                  <input
+                    {...register("hourlyRate", { valueAsNumber: true })}
+                    type="number"
+                    min={5}
+                    step={1}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Estimated Hours</label>
+                  <input
+                    {...register("estimatedHours", { valueAsNumber: true })}
+                    type="number"
+                    min={0.5}
+                    step={0.5}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Max Hours</label>
+                  <input
+                    {...register("maxHours", { valueAsNumber: true })}
+                    type="number"
+                    min={0.5}
+                    step={0.5}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-400">Changing the rate or max hours will update your payment authorization.</p>
+            </div>
+          )}
 
           {/* Schedule */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -195,7 +268,6 @@ export default function EditJobPage() {
                 type="datetime-local"
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
-              {errors.scheduleStart && <p className="mt-1 text-xs text-red-600">{errors.scheduleStart.message}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">Latest End</label>
@@ -204,7 +276,6 @@ export default function EditJobPage() {
                 type="datetime-local"
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
-              {errors.scheduleEnd && <p className="mt-1 text-xs text-red-600">{errors.scheduleEnd.message}</p>}
             </div>
           </div>
 
