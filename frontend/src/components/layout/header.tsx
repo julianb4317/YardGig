@@ -27,6 +27,7 @@ export function Header() {
           ? [
               { href: "/dashboard/customer", label: "My Jobs" },
               { href: "/jobs/recurring", label: "Recurring" },
+              { href: "/disputes", label: "Disputes" },
             ]
           : []),
         ...(user?.roles.includes("Vendor")
@@ -35,6 +36,7 @@ export function Header() {
               { href: "/dashboard/vendor/requests", label: "My Requests" },
               { href: "/dashboard/vendor/schedule", label: "Schedule" },
               { href: "/dashboard/vendor/earnings", label: "My Earnings" },
+              { href: "/disputes", label: "Disputes" },
             ]
           : []),
         ...(user?.roles.includes("Admin") || user?.roles.includes("Owner")
