@@ -2,11 +2,11 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, ApiError } from "@/lib/api-client";
-import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Search, EyeOff, XCircle } from "lucide-react";
+import { Search, EyeOff, XCircle, ChevronRight } from "lucide-react";
 import { cn, formatCents } from "@/lib/utils";
+import Link from "next/link";
 
 interface JobRow {
   id: string;
@@ -40,6 +40,7 @@ export default function JobsPage() {
       if (statusFilter !== "all") params.set("status", statusFilter);
       return apiClient<JobRow[]>(`/api/admin/jobs?${params.toString()}`);
     },
+    refetchOnWindowFocus: false,
   });
 
   const hideMutation = useMutation({
@@ -92,76 +93,84 @@ export default function JobsPage() {
         </select>
       </div>
 
-      {isLoading ? (
-        <div className="flex justify-center py-12"><Spinner /></div>
-      ) : (
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Title</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Customer</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Budget</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Created</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Actions</th>
+      {/* Table */}
+      <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        {isLoading && (
+          <div className="h-1 w-full overflow-hidden bg-gray-100">
+            <div className="h-full w-1/3 animate-pulse bg-brand-400 rounded" />
+          </div>
+        )}
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Title</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Customer</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Budget</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Created</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600">Actions</th>
+              <th className="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {!isLoading && jobs?.map((job) => (
+              <tr key={job.id} className={cn("hover:bg-gray-50 transition", job.isHidden && "opacity-50")}>
+                <td className="px-4 py-3 font-medium text-gray-900 max-w-[250px] truncate">
+                  {job.title}
+                  {job.isHidden && <span className="ml-2 text-xs text-red-500">(Hidden)</span>}
+                </td>
+                <td className="px-4 py-3 text-gray-600">{job.customerName}</td>
+                <td className="px-4 py-3">
+                  <span className={cn(
+                    "rounded-full px-2 py-0.5 text-xs font-medium",
+                    statusColors[job.status] ?? "bg-gray-100 text-gray-600"
+                  )}>
+                    {job.status}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-gray-600">{formatCents(job.budgetCents)}</td>
+                <td className="px-4 py-3 text-gray-500">{new Date(job.createdAt).toLocaleDateString()}</td>
+                <td className="px-4 py-3 text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    {!job.isHidden && (
+                      <button
+                        onClick={() => hideMutation.mutate(job.id)}
+                        disabled={hideMutation.isPending}
+                        className="p-1.5 rounded text-gray-400 hover:text-amber-600 hover:bg-amber-50"
+                        title="Hide job"
+                      >
+                        <EyeOff className="h-4 w-4" />
+                      </button>
+                    )}
+                    {job.status !== "Cancelled" && job.status !== "Completed" && (
+                      <button
+                        onClick={() => cancelMutation.mutate(job.id)}
+                        disabled={cancelMutation.isPending}
+                        className="p-1.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50"
+                        title="Force cancel"
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <Link href={`/jobs/${job.id}`} className="text-brand-600 hover:text-brand-700">
+                    <ChevronRight className="h-4 w-4" />
+                  </Link>
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {jobs?.map((job) => (
-                <tr key={job.id} className={cn("hover:bg-gray-50 transition", job.isHidden && "opacity-50")}>
-                  <td className="px-4 py-3 font-medium text-gray-900 max-w-[250px] truncate">
-                    {job.title}
-                    {job.isHidden && <span className="ml-2 text-xs text-red-500">(Hidden)</span>}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{job.customerName}</td>
-                  <td className="px-4 py-3">
-                    <span className={cn(
-                      "rounded-full px-2 py-0.5 text-xs font-medium",
-                      statusColors[job.status] ?? "bg-gray-100 text-gray-600"
-                    )}>
-                      {job.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{formatCents(job.budgetCents)}</td>
-                  <td className="px-4 py-3 text-gray-500">{new Date(job.createdAt).toLocaleDateString()}</td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      {!job.isHidden && (
-                        <button
-                          onClick={() => hideMutation.mutate(job.id)}
-                          disabled={hideMutation.isPending}
-                          className="p-1.5 rounded text-gray-400 hover:text-amber-600 hover:bg-amber-50"
-                          title="Hide job"
-                        >
-                          <EyeOff className="h-4 w-4" />
-                        </button>
-                      )}
-                      {job.status !== "Cancelled" && job.status !== "Completed" && (
-                        <button
-                          onClick={() => cancelMutation.mutate(job.id)}
-                          disabled={cancelMutation.isPending}
-                          className="p-1.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50"
-                          title="Force cancel"
-                        >
-                          <XCircle className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {jobs?.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
-                    No jobs found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+            ))}
+            {!isLoading && jobs?.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                  No jobs found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -176,6 +176,39 @@ public class AdminController(IAppDbContext db, ICurrentUserService currentUser) 
         return Ok(new { message = "User reactivated." });
     }
 
+    [HttpPut("users/{id:guid}/roles")]
+    public async Task<IActionResult> UpdateUserRoles(Guid id, [FromBody] UpdateRolesRequest request)
+    {
+        var user = await db.Users.Include(u => u.UserRoles).ThenInclude(ur => ur.Role).FirstOrDefaultAsync(u => u.Id == id);
+        if (user is null) return NotFound();
+
+        if (request.Roles is null || request.Roles.Length == 0)
+            return BadRequest(new { errors = new[] { "At least one role is required." } });
+
+        // Get all available roles
+        var allRoles = await db.Roles.ToListAsync();
+        var requestedRoles = allRoles.Where(r => request.Roles.Contains(r.Name)).ToList();
+
+        if (requestedRoles.Count != request.Roles.Length)
+            return BadRequest(new { errors = new[] { "One or more invalid roles specified." } });
+
+        var oldRoles = user.UserRoles.Select(ur => ur.Role.Name).ToArray();
+
+        // Remove existing roles
+        db.UserRoles.RemoveRange(user.UserRoles);
+
+        // Add new roles
+        foreach (var role in requestedRoles)
+        {
+            db.UserRoles.Add(new Domain.Entities.UserRole { UserId = user.Id, RoleId = role.Id });
+        }
+
+        await CreateAuditEntryAsync("user.roles_updated", "User", id, new { Roles = oldRoles }, new { Roles = request.Roles });
+        await db.SaveChangesAsync();
+
+        return Ok(new { message = "Roles updated.", roles = request.Roles });
+    }
+
     // ─────────────────── VENDOR VERIFICATION ───────────────────
 
     [HttpGet("vendors/pending")]
@@ -238,6 +271,37 @@ public class AdminController(IAppDbContext db, ICurrentUserService currentUser) 
 
         await db.SaveChangesAsync();
         return Ok(new { message = request.Approved ? "Vendor approved." : "Vendor rejected." });
+    }
+
+    [HttpPut("vendors/{id:guid}/verify-insurance")]
+    public async Task<IActionResult> VerifyInsurance(Guid id)
+    {
+        var vendor = await db.VendorProfiles.FindAsync(id);
+        if (vendor is null) return NotFound();
+
+        vendor.InsuranceVerified = true;
+        vendor.UpdatedAt = DateTime.UtcNow;
+
+        await CreateAuditEntryAsync("vendor.insurance_verified", "VendorProfile", id, null, new { InsuranceVerified = true });
+        await db.SaveChangesAsync();
+
+        return Ok(new { message = "Insurance verified." });
+    }
+
+    [HttpPut("vendors/{id:guid}/reject-insurance")]
+    public async Task<IActionResult> RejectInsurance(Guid id)
+    {
+        var vendor = await db.VendorProfiles.FindAsync(id);
+        if (vendor is null) return NotFound();
+
+        vendor.InsuranceVerified = false;
+        vendor.InsuranceDocUrl = null;
+        vendor.UpdatedAt = DateTime.UtcNow;
+
+        await CreateAuditEntryAsync("vendor.insurance_rejected", "VendorProfile", id, null, new { InsuranceVerified = false });
+        await db.SaveChangesAsync();
+
+        return Ok(new { message = "Insurance rejected. Document removed." });
     }
 
     // ─────────────────── JOB MODERATION ───────────────────
@@ -636,6 +700,7 @@ public class AdminController(IAppDbContext db, ICurrentUserService currentUser) 
 public record VerifyVendorRequest(bool Approved, string? Reason = null);
 public record ResolveDisputeRequest(string Resolution, string? Action = null);
 public record SuspendUserRequest(string Reason, DateTime? Until);
+public record UpdateRolesRequest(string[] Roles);
 public record HideJobRequest(string Reason);
 public record ForceCancelRequest(string Reason);
 public record AddNoteRequest(string Body);

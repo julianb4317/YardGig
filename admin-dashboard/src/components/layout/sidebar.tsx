@@ -33,6 +33,7 @@ const navigation: NavItem[] = [
     children: [
       { label: "All Users", href: "/users" },
       { label: "Verification", href: "/verification" },
+      { label: "Insurance", href: "/verification/insurance" },
     ],
   },
   { label: "Disputes", href: "/disputes", icon: <AlertTriangle className="h-5 w-5" /> },
@@ -42,8 +43,11 @@ const navigation: NavItem[] = [
     icon: <DollarSign className="h-5 w-5" />,
     children: [
       { label: "Revenue", href: "/finance" },
+      { label: "Transactions", href: "/finance/transactions" },
       { label: "Payouts", href: "/finance/payouts" },
       { label: "Commissions", href: "/finance/commissions" },
+      { label: "Refunds", href: "/finance/refunds" },
+      { label: "Escrow", href: "/finance/escrow" },
     ],
   },
   { label: "Analytics", href: "/analytics", icon: <BarChart3 className="h-5 w-5" /> },

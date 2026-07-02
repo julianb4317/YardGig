@@ -2,7 +2,6 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, ApiError } from "@/lib/api-client";
-import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { formatCents, cn } from "@/lib/utils";
 import { RefreshCcw } from "lucide-react";
@@ -28,6 +27,7 @@ export default function PayoutsPage() {
   const { data: payouts, isLoading } = useQuery({
     queryKey: ["admin-payouts"],
     queryFn: () => apiClient<Payout[]>("/api/admin/finance/payouts"),
+    refetchOnWindowFocus: false,
   });
 
   const retryMutation = useMutation({
@@ -40,15 +40,16 @@ export default function PayoutsPage() {
     onError: (err: ApiError) => toast.error(err.errors[0]),
   });
 
-  if (isLoading) {
-    return <div className="flex justify-center py-12"><Spinner /></div>;
-  }
-
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-gray-900">Payouts</h2>
 
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        {isLoading && (
+          <div className="h-1 w-full overflow-hidden bg-gray-100">
+            <div className="h-full w-1/3 animate-pulse bg-brand-400 rounded" />
+          </div>
+        )}
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
@@ -60,7 +61,7 @@ export default function PayoutsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {payouts?.map((payout) => (
+            {!isLoading && payouts?.map((payout) => (
               <tr key={payout.id} className="hover:bg-gray-50 transition">
                 <td className="px-4 py-3 font-medium text-gray-900">{payout.vendorName}</td>
                 <td className="px-4 py-3 text-gray-600">{formatCents(payout.amountCents)}</td>
@@ -89,7 +90,7 @@ export default function PayoutsPage() {
                 </td>
               </tr>
             ))}
-            {payouts?.length === 0 && (
+            {!isLoading && payouts?.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
                   No payouts found.

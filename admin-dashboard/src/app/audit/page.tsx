@@ -2,7 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
-import { Spinner } from "@/components/ui/spinner";
 import { useState } from "react";
 import { Search, ChevronDown, ChevronRight } from "lucide-react";
 
@@ -31,6 +30,7 @@ export default function AuditPage() {
       if (actionFilter !== "all") params.set("action", actionFilter);
       return apiClient<AuditEntry[]>(`/api/admin/audit?${params.toString()}`);
     },
+    refetchOnWindowFocus: false,
   });
 
   const toggleRow = (id: string) => {
@@ -41,10 +41,6 @@ export default function AuditPage() {
       return next;
     });
   };
-
-  if (isLoading) {
-    return <div className="flex justify-center py-12"><Spinner /></div>;
-  }
 
   return (
     <div className="space-y-6">
@@ -79,6 +75,11 @@ export default function AuditPage() {
 
       {/* Table */}
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        {isLoading && (
+          <div className="h-1 w-full overflow-hidden bg-gray-100">
+            <div className="h-full w-1/3 animate-pulse bg-brand-400 rounded" />
+          </div>
+        )}
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
@@ -90,7 +91,7 @@ export default function AuditPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {entries?.map((entry) => {
+            {!isLoading && entries?.map((entry) => {
               const isExpanded = expandedRows.has(entry.id);
               const hasDetails = entry.oldValues || entry.newValues;
 
@@ -126,7 +127,7 @@ export default function AuditPage() {
               );
             })}
             {/* Expanded rows rendered separately */}
-            {entries?.map((entry) => {
+            {!isLoading && entries?.map((entry) => {
               const isExpanded = expandedRows.has(entry.id);
               if (!isExpanded) return null;
               return (
@@ -154,7 +155,7 @@ export default function AuditPage() {
                 </tr>
               );
             })}
-            {entries?.length === 0 && (
+            {!isLoading && entries?.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
                   No audit entries found.
