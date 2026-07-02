@@ -17,42 +17,46 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { hasRole } from "@/lib/auth";
 
 interface NavItem {
   label: string;
   href?: string;
   icon: React.ReactNode;
-  children?: { label: string; href: string }[];
+  roles: string[]; // Which roles can see this item
+  children?: { label: string; href: string; roles: string[] }[];
 }
 
 const navigation: NavItem[] = [
-  { label: "Dashboard", href: "/", icon: <LayoutDashboard className="h-5 w-5" /> },
+  { label: "Dashboard", href: "/", icon: <LayoutDashboard className="h-5 w-5" />, roles: ["Owner", "Admin", "Finance", "Support", "Marketing"] },
   {
     label: "Users",
     icon: <Users className="h-5 w-5" />,
+    roles: ["Owner", "Admin", "Support"],
     children: [
-      { label: "All Users", href: "/users" },
-      { label: "Verification", href: "/verification" },
-      { label: "Insurance", href: "/verification/insurance" },
+      { label: "All Users", href: "/users", roles: ["Owner", "Admin", "Support"] },
+      { label: "Verification", href: "/verification", roles: ["Owner", "Admin", "Support"] },
+      { label: "Insurance", href: "/verification/insurance", roles: ["Owner", "Admin", "Support"] },
     ],
   },
-  { label: "Disputes", href: "/disputes", icon: <AlertTriangle className="h-5 w-5" /> },
-  { label: "Jobs", href: "/jobs", icon: <Briefcase className="h-5 w-5" /> },
+  { label: "Disputes", href: "/disputes", icon: <AlertTriangle className="h-5 w-5" />, roles: ["Owner", "Admin", "Support"] },
+  { label: "Jobs", href: "/jobs", icon: <Briefcase className="h-5 w-5" />, roles: ["Owner", "Admin", "Support"] },
   {
     label: "Finance",
     icon: <DollarSign className="h-5 w-5" />,
+    roles: ["Owner", "Admin", "Finance"],
     children: [
-      { label: "Revenue", href: "/finance" },
-      { label: "Transactions", href: "/finance/transactions" },
-      { label: "Payouts", href: "/finance/payouts" },
-      { label: "Commissions", href: "/finance/commissions" },
-      { label: "Refunds", href: "/finance/refunds" },
-      { label: "Escrow", href: "/finance/escrow" },
+      { label: "Revenue", href: "/finance", roles: ["Owner", "Admin", "Finance"] },
+      { label: "Transactions", href: "/finance/transactions", roles: ["Owner", "Admin", "Finance"] },
+      { label: "Payouts", href: "/finance/payouts", roles: ["Owner", "Admin", "Finance"] },
+      { label: "Commissions", href: "/finance/commissions", roles: ["Owner", "Admin", "Finance"] },
+      { label: "Refunds", href: "/finance/refunds", roles: ["Owner", "Admin", "Finance", "Support"] },
+      { label: "Escrow", href: "/finance/escrow", roles: ["Owner", "Admin", "Finance"] },
     ],
   },
-  { label: "Analytics", href: "/analytics", icon: <BarChart3 className="h-5 w-5" /> },
-  { label: "Audit Log", href: "/audit", icon: <ScrollText className="h-5 w-5" /> },
-  { label: "Settings", href: "/settings", icon: <Settings className="h-5 w-5" /> },
+  { label: "Analytics", href: "/analytics", icon: <BarChart3 className="h-5 w-5" />, roles: ["Owner", "Admin", "Finance", "Marketing"] },
+  { label: "Audit Log", href: "/audit", icon: <ScrollText className="h-5 w-5" />, roles: ["Owner", "Admin", "Finance"] },
+  { label: "Settings", href: "/settings", icon: <Settings className="h-5 w-5" />, roles: ["Owner"] },
 ];
 
 export function Sidebar() {
@@ -81,10 +85,13 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-        {navigation.map((item) => {
+        {navigation.filter((item) => item.roles.some((r) => hasRole(r))).map((item) => {
           if (item.children) {
+            const visibleChildren = item.children.filter((c) => c.roles.some((r) => hasRole(r)));
+            if (visibleChildren.length === 0) return null;
+
             const isOpen = expanded[item.label] ?? false;
-            const hasActiveChild = item.children.some((c) => isActive(c.href));
+            const hasActiveChild = visibleChildren.some((c) => isActive(c.href));
 
             return (
               <div key={item.label}>
@@ -107,7 +114,7 @@ export function Sidebar() {
                 </button>
                 {isOpen && (
                   <div className="ml-8 mt-1 space-y-0.5">
-                    {item.children.map((child) => (
+                    {visibleChildren.map((child) => (
                       <Link
                         key={child.href}
                         href={child.href}

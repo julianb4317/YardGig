@@ -91,9 +91,9 @@ export async function apiClient<T = unknown>(
         return JSON.parse(retryText) as T;
       }
     }
-    // Refresh failed — redirect to login
+    // Refresh failed — redirect to admin login
     if (typeof window !== "undefined") {
-      window.location.href = "/auth/login";
+      window.location.href = "/login";
     }
     throw new ApiError(401, ["Session expired. Please log in again."]);
   }
