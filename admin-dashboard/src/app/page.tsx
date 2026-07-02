@@ -17,17 +17,28 @@ import {
 } from "lucide-react";
 
 interface DashboardData {
-  jobsToday: number;
+  jobsCreatedToday: number;
   activeVendors: number;
   openDisputes: number;
   pendingVerifications: number;
+  failedPayouts: number;
+  newUsersToday: number;
   revenueTodayCents: number;
   revenueMtdCents: number;
+  completionRatePercent: number;
+  avgRating: number;
 }
 
 interface Payout {
   id: string;
   status: string;
+}
+
+interface PayoutsResponse {
+  payouts: Payout[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
 }
 
 interface DisputeRow {
@@ -37,7 +48,7 @@ interface DisputeRow {
 }
 
 const kpiConfig = [
-  { key: "jobsToday" as const, label: "Jobs Today", icon: Briefcase, color: "bg-blue-50 text-blue-600" },
+  { key: "jobsCreatedToday" as const, label: "Jobs Today", icon: Briefcase, color: "bg-blue-50 text-blue-600" },
   { key: "activeVendors" as const, label: "Active Vendors", icon: Users, color: "bg-green-50 text-green-600" },
   { key: "openDisputes" as const, label: "Open Disputes", icon: AlertTriangle, color: "bg-amber-50 text-amber-600" },
   { key: "pendingVerifications" as const, label: "Pending Verifications", icon: ShieldCheck, color: "bg-purple-50 text-purple-600" },
@@ -51,9 +62,9 @@ export default function DashboardPage() {
     queryFn: () => apiClient<DashboardData>("/api/admin/dashboard"),
   });
 
-  const { data: payouts } = useQuery({
+  const { data: payoutsData } = useQuery({
     queryKey: ["admin-payouts"],
-    queryFn: () => apiClient<Payout[]>("/api/admin/finance/payouts"),
+    queryFn: () => apiClient<PayoutsResponse>("/api/admin/finance/payouts"),
     refetchOnWindowFocus: false,
   });
 
@@ -63,6 +74,7 @@ export default function DashboardPage() {
     refetchOnWindowFocus: false,
   });
 
+  const payouts = payoutsData?.payouts;
   const failedPayouts = payouts?.filter((p) => p.status === "Failed").length ?? 0;
   const agingDisputes = disputes?.filter((d) => {
     if (d.status === "Resolved" || d.status === "Closed") return false;

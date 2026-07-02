@@ -24,8 +24,9 @@ export default function InsuranceVerificationPage() {
   const { data: vendors, isLoading } = useQuery({
     queryKey: ["admin-vendors-insurance"],
     queryFn: async () => {
-      const all = await apiClient<VendorInsurance[]>("/api/admin/users?role=Vendor");
-      return all.filter((v) => v.insuranceCarrier || v.insuranceDocUrl);
+      // Get all vendors (pending have insurance docs to review)
+      const pending = await apiClient<VendorInsurance[]>("/api/admin/vendors/pending");
+      return pending.filter((v: VendorInsurance) => v.insuranceDocUrl);
     },
     refetchOnWindowFocus: false,
   });

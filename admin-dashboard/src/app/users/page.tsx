@@ -9,28 +9,36 @@ import { cn } from "@/lib/utils";
 
 interface UserRow {
   id: string;
-  firstName: string;
-  lastName: string;
+  displayName: string;
   email: string;
   roles: string[];
   isActive: boolean;
   createdAt: string;
 }
 
+interface UsersResponse {
+  users: UserRow[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export default function UsersPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
 
-  const { data: users, isLoading } = useQuery({
+  const { data: usersData, isLoading } = useQuery({
     queryKey: ["admin-users", search, statusFilter],
     queryFn: () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
-      if (statusFilter !== "all") params.set("status", statusFilter);
-      return apiClient<UserRow[]>(`/api/admin/users?${params.toString()}`);
+      if (statusFilter !== "all") params.set("isActive", statusFilter === "active" ? "true" : "false");
+      return apiClient<UsersResponse>(`/api/admin/users?${params.toString()}`);
     },
     refetchOnWindowFocus: false,
   });
+
+  const users = usersData?.users;
 
   return (
     <div className="space-y-6">
@@ -90,7 +98,7 @@ export default function UsersPage() {
             {!isLoading && users?.map((user) => (
               <tr key={user.id} className="hover:bg-gray-50 transition">
                 <td className="px-4 py-3 font-medium text-gray-900">
-                  {user.firstName} {user.lastName}
+                  {user.displayName}
                 </td>
                 <td className="px-4 py-3 text-gray-600">{user.email}</td>
                 <td className="px-4 py-3">

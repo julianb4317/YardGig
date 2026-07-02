@@ -523,6 +523,40 @@ public class AdminController(IAppDbContext db, ICurrentUserService currentUser) 
         });
     }
 
+    [HttpGet("finance/transactions")]
+    public async Task<IActionResult> GetTransactions(
+        [FromQuery] string? status = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
+    {
+        var query = db.PaymentTransactions.AsNoTracking()
+            .Include(pt => pt.JobRequest)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<PaymentStatus>(status, true, out var s))
+            query = query.Where(pt => pt.Status == s);
+
+        var totalCount = await query.CountAsync();
+
+        var transactions = await query
+            .OrderByDescending(pt => pt.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(pt => new
+            {
+                pt.Id,
+                JobTitle = pt.JobRequest != null ? pt.JobRequest.Title : "N/A",
+                pt.AmountCents,
+                pt.PlatformFeeCents,
+                VendorEarnedCents = pt.AmountCents - pt.PlatformFeeCents,
+                Status = pt.Status.ToString(),
+                pt.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(new { transactions, totalCount, page, pageSize });
+    }
+
     [HttpGet("finance/payouts")]
     public async Task<IActionResult> GetPayouts(
         [FromQuery] string? status = null,

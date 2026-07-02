@@ -21,18 +21,27 @@ const payoutStatusColors: Record<string, string> = {
   Failed: "bg-red-50 text-red-700",
 };
 
+interface PayoutsResponse {
+  payouts: Payout[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export default function PayoutsPage() {
   const queryClient = useQueryClient();
 
-  const { data: payouts, isLoading } = useQuery({
+  const { data: payoutsData, isLoading } = useQuery({
     queryKey: ["admin-payouts"],
-    queryFn: () => apiClient<Payout[]>("/api/admin/finance/payouts"),
+    queryFn: () => apiClient<PayoutsResponse>("/api/admin/finance/payouts"),
     refetchOnWindowFocus: false,
   });
 
+  const payouts = payoutsData?.payouts;
+
   const retryMutation = useMutation({
     mutationFn: (payoutId: string) =>
-      apiClient(`/api/admin/finance/payouts/${payoutId}/retry`, { method: "POST" }),
+      apiClient(`/api/admin/finance/payouts/${payoutId}/retry`, { method: "PUT" }),
     onSuccess: () => {
       toast.success("Payout retry initiated.");
       queryClient.invalidateQueries({ queryKey: ["admin-payouts"] });

@@ -16,6 +16,13 @@ interface Transaction {
   createdAt: string;
 }
 
+interface TransactionsResponse {
+  transactions: Transaction[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 const statusColors: Record<string, string> = {
   Captured: "bg-green-50 text-green-700",
   Refunded: "bg-purple-50 text-purple-700",
@@ -26,15 +33,17 @@ const statusColors: Record<string, string> = {
 export default function TransactionsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const { data: transactions, isLoading } = useQuery({
+  const { data: txData, isLoading } = useQuery({
     queryKey: ["admin-transactions", statusFilter],
     queryFn: () => {
       const params = new URLSearchParams();
       if (statusFilter !== "all") params.set("status", statusFilter);
-      return apiClient<Transaction[]>(`/api/admin/finance/revenue?${params.toString()}`);
+      return apiClient<TransactionsResponse>(`/api/admin/finance/transactions?${params.toString()}`);
     },
     refetchOnWindowFocus: false,
   });
+
+  const transactions = txData?.transactions;
 
   return (
     <div className="space-y-6">

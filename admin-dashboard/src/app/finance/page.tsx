@@ -7,11 +7,16 @@ import { formatCents } from "@/lib/utils";
 import { useState } from "react";
 import { DollarSign, TrendingUp, ArrowUpRight, Briefcase } from "lucide-react";
 
-interface RevenueData {
-  grossRevenueCents: number;
-  platformFeesCents: number;
-  payoutsCents: number;
-  jobCount: number;
+interface RevenueResponse {
+  summary: {
+    totalGrossCents: number;
+    totalPlatformFeeCents: number;
+    totalPayoutsCents: number;
+    jobCount: number;
+  };
+  period: string;
+  from: string;
+  to: string;
 }
 
 export default function FinancePage() {
@@ -19,8 +24,10 @@ export default function FinancePage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-finance-revenue", period],
-    queryFn: () => apiClient<RevenueData>(`/api/admin/finance/revenue?period=${period}`),
+    queryFn: () => apiClient<RevenueResponse>(`/api/admin/finance/revenue?period=${period}`),
   });
+
+  const summary = data?.summary;
 
   if (isLoading) {
     return <div className="flex justify-center py-12"><Spinner /></div>;
@@ -45,25 +52,25 @@ export default function FinancePage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         <RevenueCard
           label="Gross Revenue"
-          value={formatCents(data?.grossRevenueCents ?? 0)}
+          value={formatCents(summary?.totalGrossCents ?? 0)}
           icon={DollarSign}
           color="bg-emerald-50 text-emerald-600"
         />
         <RevenueCard
           label="Platform Fees"
-          value={formatCents(data?.platformFeesCents ?? 0)}
+          value={formatCents(summary?.totalPlatformFeeCents ?? 0)}
           icon={TrendingUp}
           color="bg-blue-50 text-blue-600"
         />
         <RevenueCard
           label="Payouts"
-          value={formatCents(data?.payoutsCents ?? 0)}
+          value={formatCents(summary?.totalPayoutsCents ?? 0)}
           icon={ArrowUpRight}
           color="bg-purple-50 text-purple-600"
         />
         <RevenueCard
           label="Job Count"
-          value={String(data?.jobCount ?? 0)}
+          value={String(summary?.jobCount ?? 0)}
           icon={Briefcase}
           color="bg-amber-50 text-amber-600"
         />

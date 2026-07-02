@@ -7,14 +7,20 @@ import { Search, ChevronDown, ChevronRight } from "lucide-react";
 
 interface AuditEntry {
   id: string;
-  actorName: string;
-  actorId: string;
+  actorEmail: string;
   action: string;
   entityType: string;
   entityId: string;
   createdAt: string;
-  oldValues?: Record<string, unknown>;
-  newValues?: Record<string, unknown>;
+  oldValuesJson?: string;
+  newValuesJson?: string;
+}
+
+interface AuditResponse {
+  entries: AuditEntry[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
 }
 
 export default function AuditPage() {
@@ -22,16 +28,18 @@ export default function AuditPage() {
   const [actionFilter, setActionFilter] = useState<string>("all");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
-  const { data: entries, isLoading } = useQuery({
+  const { data: auditData, isLoading } = useQuery({
     queryKey: ["admin-audit", search, actionFilter],
     queryFn: () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (actionFilter !== "all") params.set("action", actionFilter);
-      return apiClient<AuditEntry[]>(`/api/admin/audit?${params.toString()}`);
+      return apiClient<AuditResponse>(`/api/admin/audit?${params.toString()}`);
     },
     refetchOnWindowFocus: false,
   });
+
+  const entries = auditData?.entries;
 
   const toggleRow = (id: string) => {
     setExpandedRows((prev) => {
@@ -93,7 +101,7 @@ export default function AuditPage() {
           <tbody className="divide-y divide-gray-100">
             {!isLoading && entries?.map((entry) => {
               const isExpanded = expandedRows.has(entry.id);
-              const hasDetails = entry.oldValues || entry.newValues;
+              const hasDetails = entry.oldValuesJson || entry.newValuesJson;
 
               return (
                 <tr key={entry.id} className="group">
@@ -111,7 +119,7 @@ export default function AuditPage() {
                       </button>
                     ) : null}
                   </td>
-                  <td className="px-4 py-3 font-medium text-gray-900">{entry.actorName}</td>
+                  <td className="px-4 py-3 font-medium text-gray-900">{entry.actorEmail}</td>
                   <td className="px-4 py-3">
                     <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
                       {entry.action}
@@ -130,23 +138,25 @@ export default function AuditPage() {
             {!isLoading && entries?.map((entry) => {
               const isExpanded = expandedRows.has(entry.id);
               if (!isExpanded) return null;
+              const oldValues = entry.oldValuesJson ? JSON.parse(entry.oldValuesJson) : null;
+              const newValues = entry.newValuesJson ? JSON.parse(entry.newValuesJson) : null;
               return (
                 <tr key={`${entry.id}-detail`} className="bg-gray-50">
                   <td colSpan={5} className="px-8 py-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                      {entry.oldValues && (
+                      {oldValues && (
                         <div>
                           <p className="font-medium text-gray-600 mb-1">Old Values</p>
                           <pre className="bg-white p-3 rounded-lg border border-gray-200 overflow-x-auto text-gray-700">
-                            {JSON.stringify(entry.oldValues, null, 2)}
+                            {JSON.stringify(oldValues, null, 2)}
                           </pre>
                         </div>
                       )}
-                      {entry.newValues && (
+                      {newValues && (
                         <div>
                           <p className="font-medium text-gray-600 mb-1">New Values</p>
                           <pre className="bg-white p-3 rounded-lg border border-gray-200 overflow-x-auto text-gray-700">
-                            {JSON.stringify(entry.newValues, null, 2)}
+                            {JSON.stringify(newValues, null, 2)}
                           </pre>
                         </div>
                       )}

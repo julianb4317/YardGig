@@ -14,10 +14,9 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-interface TrendPoint {
-  date: string;
-  jobsCreated: number;
-  revenueCents: number;
+interface TrendsResponse {
+  jobsByDay: { date: string; count: number }[];
+  revenueByDay: { date: string; amountCents: number }[];
 }
 
 const DAYS_OPTIONS = [7, 14, 30, 60, 90] as const;
@@ -28,18 +27,34 @@ export default function AnalyticsPage() {
   const { data: trends, isLoading } = useQuery({
     queryKey: ["admin-trends", days],
     queryFn: () =>
-      apiClient<TrendPoint[]>(`/api/admin/dashboard/trends?days=${days}`),
+      apiClient<TrendsResponse>(`/api/admin/dashboard/trends?days=${days}`),
     refetchOnWindowFocus: false,
   });
 
-  const chartData = trends?.map((point) => ({
-    date: new Date(point.date).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    }),
-    jobs: point.jobsCreated,
-    revenue: point.revenueCents / 100,
-  })) ?? [];
+  const chartData = (() => {
+    if (!trends) return [];
+    // Merge jobsByDay and revenueByDay into a unified chart array
+    const dateMap = new Map<string, { date: string; jobs: number; revenue: number }>();
+    trends.jobsByDay?.forEach((point) => {
+      const key = point.date;
+      const existing = dateMap.get(key) || { date: key, jobs: 0, revenue: 0 };
+      existing.jobs = point.count;
+      dateMap.set(key, existing);
+    });
+    trends.revenueByDay?.forEach((point) => {
+      const key = point.date;
+      const existing = dateMap.get(key) || { date: key, jobs: 0, revenue: 0 };
+      existing.revenue = point.amountCents / 100;
+      dateMap.set(key, existing);
+    });
+    return Array.from(dateMap.values())
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((p) => ({
+        date: new Date(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        jobs: p.jobs,
+        revenue: p.revenue,
+      }));
+  })();
 
   return (
     <div className="space-y-8">

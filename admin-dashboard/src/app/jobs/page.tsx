@@ -11,11 +11,11 @@ import Link from "next/link";
 interface JobRow {
   id: string;
   title: string;
-  customerName: string;
+  customerEmail: string;
   status: string;
   budgetCents: number;
+  categories: string;
   createdAt: string;
-  isHidden: boolean;
 }
 
 const statusColors: Record<string, string> = {
@@ -27,25 +27,34 @@ const statusColors: Record<string, string> = {
   Cancelled: "bg-red-50 text-red-700",
 };
 
+interface JobsResponse {
+  jobs: JobRow[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export default function JobsPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const { data: jobs, isLoading } = useQuery({
+  const { data: jobsData, isLoading } = useQuery({
     queryKey: ["admin-jobs", search, statusFilter],
     queryFn: () => {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (statusFilter !== "all") params.set("status", statusFilter);
-      return apiClient<JobRow[]>(`/api/admin/jobs?${params.toString()}`);
+      return apiClient<JobsResponse>(`/api/admin/jobs?${params.toString()}`);
     },
     refetchOnWindowFocus: false,
   });
 
+  const jobs = jobsData?.jobs;
+
   const hideMutation = useMutation({
     mutationFn: (jobId: string) =>
-      apiClient(`/api/admin/jobs/${jobId}/hide`, { method: "POST" }),
+      apiClient(`/api/admin/jobs/${jobId}/hide`, { method: "PUT", body: { reason: "Hidden by admin" } }),
     onSuccess: () => {
       toast.success("Job hidden.");
       queryClient.invalidateQueries({ queryKey: ["admin-jobs"] });
@@ -55,7 +64,7 @@ export default function JobsPage() {
 
   const cancelMutation = useMutation({
     mutationFn: (jobId: string) =>
-      apiClient(`/api/admin/jobs/${jobId}/cancel`, { method: "POST" }),
+      apiClient(`/api/admin/jobs/${jobId}/cancel`, { method: "PUT", body: { reason: "Force cancelled by admin" } }),
     onSuccess: () => {
       toast.success("Job cancelled.");
       queryClient.invalidateQueries({ queryKey: ["admin-jobs"] });
@@ -114,12 +123,11 @@ export default function JobsPage() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {!isLoading && jobs?.map((job) => (
-              <tr key={job.id} className={cn("hover:bg-gray-50 transition", job.isHidden && "opacity-50")}>
+              <tr key={job.id} className="hover:bg-gray-50 transition">
                 <td className="px-4 py-3 font-medium text-gray-900 max-w-[250px] truncate">
                   {job.title}
-                  {job.isHidden && <span className="ml-2 text-xs text-red-500">(Hidden)</span>}
                 </td>
-                <td className="px-4 py-3 text-gray-600">{job.customerName}</td>
+                <td className="px-4 py-3 text-gray-600">{job.customerEmail}</td>
                 <td className="px-4 py-3">
                   <span className={cn(
                     "rounded-full px-2 py-0.5 text-xs font-medium",
@@ -132,7 +140,7 @@ export default function JobsPage() {
                 <td className="px-4 py-3 text-gray-500">{new Date(job.createdAt).toLocaleDateString()}</td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-1">
-                    {!job.isHidden && (
+                    {job.status !== "Cancelled" && (
                       <button
                         onClick={() => hideMutation.mutate(job.id)}
                         disabled={hideMutation.isPending}
@@ -142,7 +150,7 @@ export default function JobsPage() {
                         <EyeOff className="h-4 w-4" />
                       </button>
                     )}
-                    {job.status !== "Cancelled" && job.status !== "Completed" && (
+                    {job.status !== "Cancelled" && job.status !== "Completed" && job.status !== "Paid" && (
                       <button
                         onClick={() => cancelMutation.mutate(job.id)}
                         disabled={cancelMutation.isPending}
