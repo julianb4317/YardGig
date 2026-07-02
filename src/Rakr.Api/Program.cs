@@ -211,7 +211,7 @@ if (app.Environment.IsDevelopment())
                 var appDb = services.GetRequiredService<Rakr.Infrastructure.Persistence.AppDbContext>();
                 var domainUser = new Rakr.Domain.Entities.ApplicationUser
                 {
-                    Id = Guid.Parse(adminUser.Id),
+                    Id = adminUser.Id,
                     Email = adminEmail,
                     DisplayName = adminName,
                     EmailVerified = true,
