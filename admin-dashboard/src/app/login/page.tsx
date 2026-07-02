@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isPending, setIsPending] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsPending(true);
     try {
@@ -29,12 +29,11 @@ export default function LoginPage() {
         skipAuth: true,
       });
 
-      // Check if user has admin access
       const adminRoles = ["Admin", "Owner", "Finance", "Support", "Marketing"];
       const hasAdminAccess = data.roles.some((r) => adminRoles.includes(r));
 
       if (!hasAdminAccess) {
-        toast.error("Access denied. You don't have admin privileges.");
+        toast.error("Access denied. This account doesn't have admin privileges.");
         setIsPending(false);
         return;
       }
@@ -59,7 +58,7 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-slate-400">Sign in to the administration panel</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="rounded-xl bg-white p-6 shadow-xl space-y-4">
+        <form onSubmit={handleLogin} className="rounded-xl bg-white p-6 shadow-xl space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">Email</label>
             <input
@@ -90,6 +89,10 @@ export default function LoginPage() {
             {isPending ? "Signing in..." : "Sign In"}
           </button>
         </form>
+
+        <p className="mt-4 text-center text-xs text-slate-500">
+          Admin accounts are invite-only. Contact your system owner for access.
+        </p>
       </div>
     </div>
   );

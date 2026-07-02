@@ -182,6 +182,61 @@ if (app.Environment.IsDevelopment())
     {
         logger.LogError(ex, "AppIdentityDbContext migration failed.");
     }
+
+    // Seed default admin/owner account (dev only — creates if not exists)
+    try
+    {
+        var adminEmail = builder.Configuration["SeedAdmin:Email"] ?? "admin@rakr.com";
+        var adminPassword = builder.Configuration["SeedAdmin:Password"] ?? "Admin123!@#Dev";
+        var adminName = builder.Configuration["SeedAdmin:DisplayName"] ?? "System Admin";
+
+        var userManager = services.GetRequiredService<UserManager<Rakr.Infrastructure.Identity.AppIdentityUser>>();
+        var existingAdmin = await userManager.FindByEmailAsync(adminEmail);
+
+        if (existingAdmin is null)
+        {
+            var adminUser = new Rakr.Infrastructure.Identity.AppIdentityUser
+            {
+                UserName = adminEmail,
+                Email = adminEmail,
+                EmailConfirmed = true,
+            };
+
+            var createResult = await userManager.CreateAsync(adminUser, adminPassword);
+            if (createResult.Succeeded)
+            {
+                await userManager.AddToRolesAsync(adminUser, ["Owner", "Admin"]);
+
+                // Also create domain user
+                var appDb = services.GetRequiredService<Rakr.Infrastructure.Persistence.AppDbContext>();
+                var domainUser = new Rakr.Domain.Entities.ApplicationUser
+                {
+                    Id = Guid.Parse(adminUser.Id),
+                    Email = adminEmail,
+                    DisplayName = adminName,
+                    EmailVerified = true,
+                    AuthProvider = "local",
+                    IsActive = true
+                };
+                appDb.Users.Add(domainUser);
+                await appDb.SaveChangesAsync();
+
+                logger.LogInformation("Seed admin created: {Email} (Owner)", adminEmail);
+            }
+            else
+            {
+                logger.LogWarning("Failed to create seed admin: {Errors}", string.Join(", ", createResult.Errors.Select(e => e.Description)));
+            }
+        }
+        else
+        {
+            logger.LogInformation("Seed admin already exists: {Email}", adminEmail);
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "Seed admin creation failed (non-fatal).");
+    }
 }
 
 // Middleware pipeline
